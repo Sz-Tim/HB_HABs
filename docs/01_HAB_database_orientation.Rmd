@@ -1,0 +1,130 @@
+---
+title: "OffAqua"
+subtitle: "HAB monitoring database"
+author: "Tim Szewczyk"
+organization: "SAMS"
+output: 
+  html_document:
+    theme: spacelab
+    df_print: paged
+    anchor_sections: TRUE
+    toc: yes
+    toc_depth: 2
+    toc_float: true
+  pdf_document:
+    toc: yes
+  html_notebook:
+    theme: spacelab
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo=F}
+# set directory for knitr as main project directory
+knitr::opts_knit$set(root.dir=rprojroot::find_rstudio_root_file())
+```
+
+```{r setup_workspace, include=FALSE, message=FALSE, warning=FALSE}
+# libraries, functions, directories
+pkgs <- c("tidyverse", "lubridate", "jsonlite", "sf")
+suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
+theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
+walk(dir("code", "00[0-9]_fn", full.names=T), source)
+
+gis.dir <- "..\\..\\00_gis\\"
+UK_bbox <- st_bbox(c(xmin=-11, xmax=2, ymin=49, ymax=61), crs=st_crs(4326))
+coast <- read_sf(paste0(gis.dir, "coastline\\ne_10m_land.shp")) %>%
+  add_row(read_sf(paste0(gis.dir, "coastline\\ne_10m_minor_islands.shp"))) %>%
+  st_crop(UK_bbox)
+```
+
+
+# Overview
+
+This file is for figuring out how to access the HAB monitoring database. From Steve Gontarek:
+
+> I can give you access to the online DB via these urls – it’s a REST API:
+>
+> [varro:3001/cefas_counts](varro:3001/cefas_counts)
+> [varro:3001/fsa_counts](varro:3001/fsa_counts)
+> 
+> you can also query them better
+>
+> [varro:3001/cefas_counts?date_collected=gte.2022-01-01](varro:3001/cefas_counts?date_collected=gte.2022-01-01)
+> [varro:3001/cefas_counts?date_collected=gte.2022-01-01](varro:3001/cefas_counts?date_collected=gte.2022-01-01&date_collected=lt.2022-01-18)
+>
+> e.g. gte ( greater than or equal), lt, less then etc
+> 
+> more details here for the REST API [Tables and Views — PostgREST 9.0.0 documentation](https://postgrest.org/en/v9.0/api.html)
+>
+> ...main tables are fsa_counts (Phytoplankton) and cefas_counts (toxins)
+
+Note that access is restricted to the internal SAMS network, so it requires being connected via VPN. I should be able to access what I need using the package `jsonlite`.
+
+I'm not sure how to get R to recognize this form of a url... I've tried a couple of packages and methods, adding file://, etc, but I'm just not sure what I'm doing really. I think varro is the name of the server. So in the meantime, I just copied the current versions to my hard drive using a browser.
+
+```{r full_DB}
+fsa.df <- fromJSON("data\\copy_fsa.txt") %>% 
+  as_tibble %>% 
+  select(-geom) %>%
+  filter(easting < 4e10) %>% # entry error: Camb - Mid Yell Voe - 2013-04-16 
+  filter(easting > 0 & northing > 0) %>%
+  filter(!is.na(date_collected)) %>%
+  filter(karenia_mikimotoi >= 0) %>% # -99 in karenia...?
+  mutate(date_collected=date(date_collected),
+         year=year(date_collected),
+         month=month(date_collected),
+         yday=yday(date_collected),
+         ydayCos=cos(yday/365),
+         ydaySin=sin(yday/365),
+         x_y=paste0(easting, "_", northing)) %>%
+  filter(year < 2022)
+fsa.sf <- st_as_sf(fsa.df, coords=c("easting", "northing"), crs=st_crs(27700))
+# st_write(fsa.sf, "data\\fsa.shp", append=F)
+
+fsa.ldf <- fsa.df %>% pivot_longer(8:12, names_to="spp", values_to="N")
+```
+
+```{r EDA_maps}
+fsa.df %>% group_by(easting, northing) %>% 
+  summarise(N=n(), nSin=n_distinct(sin), nSite=n_distinct(site), nArea=n_distinct(area)) %>%
+  st_as_sf(coords=c("easting", "northing"), crs=st_crs(27700)) %>%
+  # st_write("data\\fsa_xy_counts.shp", append=F)
+  ggplot() + geom_sf(data=coast) +
+  geom_sf(aes(colour=N)) +
+  scale_colour_viridis_c()
+
+
+geo_columns <- c("sin", "area", "site", "x_y")
+locs <- map(geo_columns, ~unique(fsa.df[[.x]])) %>% setNames(geo_columns) 
+map(locs, length)
+ggplot(coast) + geom_sf() +
+  geom_sf(data=filter(fsa.sf, sin %in% locs[[1]][1:10]), aes(colour=site))
+ggplot(coast) + geom_sf() +
+  geom_sf(data=filter(fsa.sf, area %in% locs[[2]][1:20]), aes(colour=area))
+```
+
+
+
+```{r EDA}
+fsa.ldf %>% 
+  group_by(year, month, spp) %>% 
+  summarise(logN=mean(log(N+1), na.rm=T), 
+            prP=mean(N>0, na.rm=T)) %>% 
+  ggplot(aes(month, prP, group=year, colour=year)) + 
+  stat_smooth(se=F) +
+  facet_wrap(~spp) + 
+  scale_colour_viridis_c() +
+  scale_x_continuous(breaks=1:12)
+fsa.ldf %>% 
+  group_by(year, month, spp) %>% 
+  summarise(logN=mean(log(N+1), na.rm=T), 
+            prP=mean(N>0, na.rm=T)) %>% 
+  ggplot(aes(month, prP, group=year, colour=year)) + 
+  geom_line() +
+  facet_wrap(~spp) + 
+  scale_colour_viridis_c() +
+  scale_x_continuous(breaks=1:12)
+```
+

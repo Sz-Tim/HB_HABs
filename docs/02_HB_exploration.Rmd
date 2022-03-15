@@ -1,0 +1,341 @@
+---
+title: "OffAqua"
+subtitle: "Bayesian HAB model exploration"
+author: "Tim Szewczyk"
+organization: "SAMS"
+output: 
+  html_document:
+    theme: spacelab
+    df_print: paged
+    anchor_sections: TRUE
+    toc: yes
+    toc_depth: 2
+    toc_float: true
+  pdf_document:
+    toc: yes
+  html_notebook:
+    theme: spacelab
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo=F}
+# set directory for knitr as main project directory
+knitr::opts_knit$set(root.dir=rprojroot::find_rstudio_root_file())
+```
+
+```{r setup_workspace, include=FALSE, message=FALSE, warning=FALSE}
+# libraries, functions, directories
+pkgs <- c("tidyverse", "lubridate", "LaplacesDemon", "ncdf4", "sf",
+          "cmdstanr", "bayesplot", "posterior", "jsonlite")
+suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
+theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
+walk(dir("code", "00[0-9]_fn", full.names=T), source)
+```
+
+
+```{r}
+fsa.df <- fromJSON("data\\copy_fsa.txt") %>% 
+  as_tibble %>% 
+  select(-geom) %>%
+  filter(easting < 4e10) %>% # entry error: Camb - Mid Yell Voe - 2013-04-16 
+  filter(easting > 0 & northing > 0) %>%
+  filter(!is.na(date_collected)) %>%
+  filter(karenia_mikimotoi >= 0) %>% # -99 in karenia...?
+  mutate(date_collected=date(date_collected),
+         year=year(date_collected),
+         month=month(date_collected),
+         yday=yday(date_collected),
+         ydayCos=cos(yday/365),
+         ydaySin=sin(yday/365),
+         x_y=paste0(easting, "_", northing)) %>%
+  filter(year < 2022)
+fsa.sf <- st_as_sf(fsa.df, coords=c("easting", "northing"), crs=st_crs(27700))
+```
+
+# Overview
+
+This script explores possibilities for the structure of a model of harmful algal blooms. The final product will be a component of the HABReport early warning system and forecasting system in Scotland. Currently, I'm developing a hierarchical Bayesian model. A future alternative could be to use a hierarchical neural network since the goal really is prediction (Joseph 2020).
+
+There are two primary components to develop: a **sampling sumbodel** and a **forecasting submodel**.
+
+
+## Sampling submodel
+The goal of this component is to estimate latent density within the local area surrounding each monitoring site, accounting for sampling effects. We assume that each water sample is a sample of the local area, moderated by time of day, depth, and tide. This average daily density is what we are interested in as our improved estimate of algal density at the site.
+
+Phytoplankton densities vary over the short term based on the tide, the time of day (population growth, diel migration), temperature, and depth. Things change quickly, both through population growth in good conditions and because the water never stops moving.
+
+For a single species, this could be:
+
+$ y_{it} \sim Poisson(\lambda_{it} + \beta^T \mathbf{X_{it}} + m_{it}) $
+
+where $y_{it}$ is the observed density at site $i$ at time $t$ collected by method $m$, $\lambda_{it}$ is the latent local density at dawn on the day of sampling, $\beta$ is a vector of slopes, and $\mathbf{X_{it}}$ is a matrix of environmental variables that vary *within* the local site to drive deterministic variation. Time $t$ could be hourly, using WeStCOMS data as they are, or by every 15-30 minutes assuming linear change in the environmental variables between hours.
+
+Another consideration is that there should be some interactions. The effect of temperature and light might also depend on date, or each other.
+
+
+
+## Forecasting submodel
+The goal of this component is to predict latent density $\lambda_{it}$ within the local area surrounding each monitoring site forward in time up to one week. There are many factors that could be included, such as spatial random effects among sites, predicted temperature, predicted sunshine, predicted currents, predicted upwellings, seasonal effects, predicted wind vectors, the probability of offshore HABs within a certain radius, site aspect, turbulence, and processed remotely sensed chlorophyll data. It also probably makes sense to include lagged effects, as algal blooms develop over the course of days while being swept by the wind and water. An auto-regressive model might also be a reasonable approach. 
+
+We have a relatively long dataset to use to train and test the model, but it will take some real consideration as to what to include and how to include it. A giant regression is the simplest first step. A multi-scale model could also make sense, with some variables incorporated locally, regionally, or both.
+
+For many variables as well as spatial autocorrelation, particle tracking simulations could be useful to estimate connectivity (long-term, recent, forecasted) rather than using distance per se. Maybe a feedback loop with the particle tracking simulations?
+
+For example, it could be modelled as:
+
+$ \lambda_{it} = \lambda_{i,t-1} + localGrowth_{i,\Delta t} + advectedAlgae_{r,\Delta t} $
+$ localGrowth_{i, \Delta t} = f(temp_i, sun_i, upwelling_i, turbulence_i, date) $
+$ advectedAlgae_{r,\Delta t} = f(temp_r, sun_r, wind_r, currents_r, aspect_i, date, \phi) $
+
+where $r$ indicates conditions within a predetermined radius around site $i$ and $\phi$ is a spatial random effect term.
+
+## Variable definitions
+The spatial and temporal precision of several variables needs to be well considered and clearly defined. Specifically, for a given target species: 
+
+- $y_{it}$ is the **observed density** (count?) at site $i$ and time $t$, which is an observation of $\lambda_{it}$ moderated by the sampling method, the depth of the sample, the tidal state, and the cumulative light that day.
+- $\lambda_{it}$ is the **latent average density** at site $i$ at the start of day $t$, and changes more slowly. 
+
+
+
+
+# Simulations
+
+## Entirely fictitious
+
+**This is deprecated -- based on an unnecessarily complex structure**
+
+First, a simple simulation of how the sampling model could work. We make up a set of sampling data which lists the sampling mode, depth, time, and tide state for each sample. Then we make up effects of each, separating $\beta$ into $\beta_\lambda$ and $\beta_y$. Then center and scale the continuous variables using \code{LaplacesDemon::CenterScale()} and multiply for each sample. Note that the effects are regressions with intercept 0, which 1) forces a means parameterization for the discrete covariates, and 2) allows for $\Lambda$ as the intercept at each site.
+
+### Simulation
+
+```{r sampling_simple_sims}
+simple.par <- setSimParams(nDays=50)
+sampling.df <- makeSimSamples(simple.par)
+
+betas <- tibble(parameter=paste0("beta[", 1:7, "]"),
+                value=c(0.7,  # time
+                        -0.5, # time^2
+                        -0.5, # depth
+                        0.2, # tide
+                        0.2, # 10m Tube Sampler
+                        -0.5, # Bucket
+                        0 # Other (specified)
+                ))
+
+samp.mx <- model.matrix(~ 0 + time_sc + I(time_sc^2) + depth_sc + tides_sc + mode, 
+                        data=sampling.df)
+
+sampling.df <- sampling.df %>% 
+  mutate(lnlambdaSampled=lnlambda + c(samp.mx %*% betas$value),
+         phytDens=rpois(n(), exp(lnlambdaSampled)),
+         lnPhytDensp1=log(phytDens+1))
+
+# Visualize
+hist(sampling.df$lnPhytDensp1)
+plot(lnPhytDensp1 ~ lnlambdaSampled, sampling.df); abline(0,1)
+plot(lnPhytDensp1 ~ lnlambdap1, sampling.df); abline(0,1)
+
+# Covariates
+ggplot(sampling.df, aes(time, lnlambdaSampled-lnlambda, colour=mode)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x+I(x^2))
+ggplot(sampling.df, aes(time, lnPhytDensp1-lnlambdap1)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x+I(x^2))
+ggplot(sampling.df, aes(depth, lnPhytDensp1-lnlambdap1)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x)
+ggplot(sampling.df, aes(tides, lnPhytDensp1-lnlambdap1)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x)
+ggplot(sampling.df, aes(lnlambdaSampled, lnPhytDensp1, colour=mode)) + 
+  geom_point() + stat_smooth(method="lm", formula=y~x) +
+  geom_abline(linetype=2)
+ggplot(sampling.df, aes(lnlambdap1, lnPhytDensp1, colour=mode)) + 
+  geom_point() + stat_smooth(method="lm", formula=y~x) +
+  geom_abline(linetype=2)
+ggplot(sampling.df, aes(exp(lnlambda), phytDens, colour=mode)) + 
+  geom_point() + stat_smooth(method="lm", formula=y~x) +
+  geom_abline(linetype=2)
+```
+
+### Stan model
+```{r sampling_simple_stan}
+mean(sampling.df$lnlambda); sd(sampling.df$lnlambda)
+mean(sampling.df$lnPhytDensp1); sd(sampling.df$lnPhytDensp1)
+
+mod <- cmdstan_model("models\\00_sampling_simple.stan")
+sampling_simple.data <- list(
+  N=nrow(sampling.df),
+  X=samp.mx,
+  nCov=ncol(samp.mx),
+  y=sampling.df$phytDens,
+  grainsize=1
+)
+fit <- mod$sample(data=sampling_simple.data,
+                  chains=4, parallel_chains=4,
+                  refresh=500, iter_sampling=2000)
+fit$cmdstan_diagnose()
+out.sum <- fit$summary()
+
+mcmc_areas(fit$draws("beta")) + 
+  geom_point(data=beta.sim, aes(x=value), shape=1, size=4)
+
+out.df <- sampling.df %>%
+  mutate(lnlambda_mean=filter(out.sum, grepl("ln_lambda", variable))$mean,
+         lnlambda_q5=filter(out.sum, grepl("ln_lambda", variable))$q5,
+         lnlambda_q95=filter(out.sum, grepl("ln_lambda", variable))$q95)
+
+ggplot(out.df, aes(lnlambda, lnlambda_mean)) + geom_point() +
+  geom_linerange(aes(ymin=lnlambda_q5, ymax=lnlambda_q95)) +
+  geom_abline()
+
+ggplot(out.df, aes(lnlambdaSampled, lnlambda_mean)) + geom_point() +
+  geom_linerange(aes(ymin=lnlambda_q5, ymax=lnlambda_q95)) +
+  geom_abline()
+
+ggplot(out.df, aes(lnPhytDensp1, lnlambda_mean)) + geom_point() +
+  geom_linerange(aes(ymin=lnlambda_q5, ymax=lnlambda_q95)) +
+  geom_abline()
+
+ggplot(out.df, aes(lnlambda)) + 
+  geom_point(aes(y=exp(lnlambda_mean) - exp(lnlambda)), shape=1) + 
+  geom_point(aes(y=PhytDens - exp(lnlambda)), col="red", shape=1)
+
+out.df %>% 
+  summarise(RMSE_obs=sqrt(mean((lnPhytDensp1 - lnlambda)^2)),
+            RMSE_mod=sqrt(mean((lnlambda_mean - lnlambda)^2)))
+
+```
+
+
+
+
+## Real hydrodata
+
+Instead of directly using the reported tidal state and time, we can make these more realistic by reading in WeStCOMs hydrodynamic data and calculating the tide and cumulative daily solar radiation, which should be more closely related to what the phytoplankton are responding to.
+
+### Simulation
+
+```{r sampling_hydro_sim}
+hydro.par <- setSimParams(nDays=29)
+site.xy <- fsa.df %>% group_by(sin, area, site) %>% 
+  summarise(lon=mean(easting), lat=mean(northing))
+# TODO Next, add observed lnlambdap1
+sampling.df <- makeSimSamples(hydro.par,
+                              "D:\\hydroOut\\WestCOMS2\\Archive\\netcdf_2019\\",
+                              "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.shp",
+                              site.xy)
+
+betas <- tibble(parameter=paste0("beta[", 1:8, "]"),
+                value=c(0.3,  # time
+                        -0.5, # time^2
+                        1, # short_wave
+                        -1, # zeta
+                        1.5, # temp
+                        0.2, # 10m Tube Sampler
+                        0, # Bucket
+                        0 # Other (specified)
+                ))
+
+samp.mx <- model.matrix(~ 0 + time_sc + I(time_sc^2) + 
+                          short_wave_sc + zeta_sc + temp_sc + mode, 
+                        data=sampling.df)
+
+sampling.df <- sampling.df %>% 
+  mutate(phytDens=sample(fsa.df$pseudo_nitzschia_sp, n(), replace=T),
+         lnPhytDensp1=log(phytDens+1),
+         lambda=phytDens + c(exp(samp.mx %*% betas$value)),
+         lnlambda=log(lambda),
+         lnlambdap1=log(lambda+1))
+  # mutate(lnlambdaSampled=lnlambda + c(samp.mx %*% betas$value),
+  #        phytDens=rpois(n(), exp(lnlambdaSampled)),
+  #        lnPhytDensp1=log(phytDens+1))
+
+hist(sampling.df$lnPhytDensp1)
+plot(lnPhytDensp1 ~ lnlambdaSampled, sampling.df); abline(0,1)
+plot(lnPhytDensp1 ~ lnlambdap1, sampling.df); abline(0,1)
+
+# Covariates
+ggplot(sampling.df, aes(time, lnlambdaSampled-lnlambda, colour=mode)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x+I(x^2))
+ggplot(sampling.df, aes(time, lnPhytDensp1-lnlambdap1)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x+I(x^2))
+ggplot(sampling.df, aes(short_wave, lnPhytDensp1-lnlambdap1)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x)
+ggplot(sampling.df, aes(zeta, lnPhytDensp1-lnlambdap1)) +
+  geom_point() + stat_smooth(method="lm", formula=y~x)
+ggplot(sampling.df, aes(lnlambdaSampled, lnPhytDensp1, colour=mode)) + 
+  geom_point() + stat_smooth(method="lm", formula=y~x) +
+  geom_abline(linetype=2)
+ggplot(sampling.df, aes(lnlambdap1, lnPhytDensp1, colour=mode)) + 
+  geom_point() + stat_smooth(method="lm", formula=y~x) +
+  geom_abline(linetype=2)
+ggplot(sampling.df, aes(exp(lnlambda), phytDens, colour=mode)) + 
+  geom_point() + stat_smooth(method="lm", formula=y~x) +
+  geom_abline(linetype=2)
+```
+
+### Stan model
+```{r sampling_simple_stan}
+mean(sampling.df$lnlambda); sd(sampling.df$lnlambda)
+mean(sampling.df$lnPhytDensp1); sd(sampling.df$lnPhytDensp1)
+
+cov_include <- sample(ncol(samp.mx), 3)
+beta_include <- betas[cov_include,] %>% 
+  mutate(parameter=paste0("beta[", row_number(), "]"))
+
+mod <- cmdstan_model("models\\00_sampling_simple.stan")
+sampling_hydro.data <- list(
+  N=nrow(sampling.df),
+  X=samp.mx[,cov_include],
+  nCov=ncol(samp.mx[,cov_include]),
+  y=round(sampling.df$phytDens),
+  grainsize=1
+)
+
+fit <- brms::brm(lnPhytDensp1 ~ temp_sc + I(temp_sc^2) + short_wave_sc + zeta_sc, 
+                 data=sampling.df, family=gaussian())
+pp_check(fit)
+
+fit <- mod$sample(data=sampling_hydro.data,
+                  chains=4, parallel_chains=4,
+                  max_treedepth=20,
+                  refresh=500, iter_sampling=2000)
+fit$cmdstan_diagnose()
+out.sum <- fit$summary()
+
+mcmc_areas(fit$draws("beta")) + 
+  geom_point(data=beta_include, aes(x=value), shape=1, size=4)
+
+ppc_dens_overlay(y = log(sampling_hydro.data$y+1),
+                 yrep = log(fit$draws("y_pred", format="matrix")[1:100,]+1))
+
+out.df <- sampling.df %>%
+  mutate(lnlambda_mean=filter(out.sum, grepl("ln_lambda", variable))$mean,
+         lnlambda_q5=filter(out.sum, grepl("ln_lambda", variable))$q5,
+         lnlambda_q95=filter(out.sum, grepl("ln_lambda", variable))$q95)
+
+ggplot(out.df, aes(lnlambda, lnlambda_mean)) + geom_point() +
+  geom_linerange(aes(ymin=lnlambda_q5, ymax=lnlambda_q95)) +
+  geom_abline()
+
+ggplot(out.df, aes(lnlambdaSampled, lnlambda_mean)) + geom_point() +
+  geom_linerange(aes(ymin=lnlambda_q5, ymax=lnlambda_q95)) +
+  geom_abline()
+
+ggplot(out.df, aes(lnPhytDensp1, lnlambda_mean)) + geom_point() +
+  geom_linerange(aes(ymin=lnlambda_q5, ymax=lnlambda_q95)) +
+  geom_abline()
+
+ggplot(out.df, aes(lnlambda)) + 
+  geom_point(aes(y=lnlambda_mean - lnlambda), alpha=0.5) + 
+  geom_point(aes(y=lnPhytDensp1 - lnlambda), col="red", shape=1)
+
+out.df %>% 
+  summarise(RMSE_obs=sqrt(mean((lnPhytDensp1 - lnlambda)^2)),
+            RMSE_mod=sqrt(mean((lnlambda_mean - lnlambda)^2)),
+            RMSE_obsNat=sqrt(mean((phytDens - exp(lnlambda))^2)),
+            RMSE_modNat=sqrt(mean((exp(lnlambda_mean) - exp(lnlambda))^2))) %>%
+  mutate(chg=(RMSE_mod - RMSE_obs)/RMSE_obs,
+         chgNat=(RMSE_modNat - RMSE_obsNat)/RMSE_obsNat)
+
+```
