@@ -63,12 +63,11 @@ loadHydroVars <- function(sampling.df, i_date, site_trinode, westcoms.dir, sep) 
   
   for(j in i_rows) {
     sampling.df$short_wave[j] <- integrateShortWave(short_wave, 
-                                                    sampling.df$site[j], 
+                                                    j, 
                                                     sampling.df$time[j])
-    sampling.df$zeta[j] <- zeta[sampling.df$site[j],sampling.df$hour[j]]
-    j_siglay <- which.min(abs(waterDepth[sampling.df$site[j]] * siglay - 
-                                sampling.df$depth[j]))
-    sampling.df$temp[j] <- temp[sampling.df$site[j],j_siglay, sampling.df$hour[j]]
+    sampling.df$zeta[j] <- zeta[j,sampling.df$hour[j]]
+    j_siglay <- which.min(abs(waterDepth[j] * siglay - sampling.df$depth[j]))
+    sampling.df$temp[j] <- temp[j,j_siglay, sampling.df$hour[j]]
   }
   
   return(sampling.df)
@@ -98,13 +97,13 @@ meanOfNodes <- function(nc.ar, node.mx) {
 
 
 
-integrateShortWave <- function(nc.var, siteNum, endTime, startTime=0) {
+integrateShortWave <- function(nc.var, rowNum, endTime, startTime=0) {
   # linear interpolation between hours
   # short_wave units = joules/s
   hourlyJoules <- rep(0, ceiling(endTime)-floor(startTime))
   for(hour in seq_along(hourlyJoules)) {
-    varStart <- nc.var[siteNum,hour]
-    varEnd <- nc.var[siteNum,hour+1]
+    varStart <- nc.var[rowNum,hour]
+    varEnd <- nc.var[rowNum,hour+1]
     dt <- 3600
     if(hour == ceiling(endTime)) {
       propHour <- endTime %% 1
