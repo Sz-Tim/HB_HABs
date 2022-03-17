@@ -32,11 +32,18 @@ pkgs <- c("tidyverse", "lubridate", "LaplacesDemon", "ncdf4", "sf",
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "00[0-9]_fn", full.names=T), source)
+sep <- ifelse(.Platform$OS.type=="unix", "/", "\\")
+westcoms.dir <- ifelse(.Platform$OS.type=="unix",
+                       "/media/archiver/common/sa01da-work/WeStCOMS2/Archive/",
+                       "D:\\hydroOut\\WestCOMS2\\Archive\\")
+mesh.f <- ifelse(.Platform$OS.type=="unix",
+                 "/home/sa04ts/FVCOM_meshes/WeStCOMS2_Mesh.gpkg",
+                 "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
 ```
 
 
 ```{r}
-fsa.df <- fromJSON("data\\copy_fsa.txt") %>% 
+fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>% 
   as_tibble %>% 
   select(-geom) %>%
   filter(easting < 4e10) %>% # entry error: Camb - Mid Yell Voe - 2013-04-16 
@@ -50,7 +57,7 @@ fsa.df <- fromJSON("data\\copy_fsa.txt") %>%
          ydayCos=cos(yday/365),
          ydaySin=sin(yday/365),
          x_y=paste0(easting, "_", northing)) %>%
-  filter(year < 2022)
+  filter(year > 2019 & year < 2022)
 fsa.sf <- st_as_sf(fsa.df, coords=c("easting", "northing"), crs=st_crs(27700))
 ```
 
@@ -219,11 +226,7 @@ Instead of directly using the reported tidal state and time, we can make these m
 hydro.par <- setSimParams(nDays=29)
 site.xy <- fsa.df %>% group_by(sin, area, site) %>% 
   summarise(lon=mean(easting), lat=mean(northing))
-# TODO Next, add observed lnlambdap1
-sampling.df <- makeSimSamples(hydro.par,
-                              "D:\\hydroOut\\WestCOMS2\\Archive\\netcdf_2019\\",
-                              "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.shp",
-                              site.xy)
+sampling.df <- makeSimSamples(hydro.par, westcoms.dir, mesh.f, site.xy, sep)
 
 betas <- tibble(parameter=paste0("beta[", 1:8, "]"),
                 value=c(0.3,  # time
@@ -241,14 +244,9 @@ samp.mx <- model.matrix(~ 0 + time_sc + I(time_sc^2) +
                         data=sampling.df)
 
 sampling.df <- sampling.df %>% 
-  mutate(phytDens=sample(fsa.df$pseudo_nitzschia_sp, n(), replace=T),
-         lnPhytDensp1=log(phytDens+1),
-         lambda=phytDens + c(exp(samp.mx %*% betas$value)),
-         lnlambda=log(lambda),
-         lnlambdap1=log(lambda+1))
-  # mutate(lnlambdaSampled=lnlambda + c(samp.mx %*% betas$value),
-  #        phytDens=rpois(n(), exp(lnlambdaSampled)),
-  #        lnPhytDensp1=log(phytDens+1))
+  mutate(lnlambdaSampled=lnlambda + c(samp.mx %*% betas$value),
+         phytDens=rpois(n(), exp(lnlambdaSampled)),
+         lnPhytDensp1=log(phytDens+1))
 
 hist(sampling.df$lnPhytDensp1)
 plot(lnPhytDensp1 ~ lnlambdaSampled, sampling.df); abline(0,1)
@@ -291,10 +289,6 @@ sampling_hydro.data <- list(
   y=round(sampling.df$phytDens),
   grainsize=1
 )
-
-fit <- brms::brm(lnPhytDensp1 ~ temp_sc + I(temp_sc^2) + short_wave_sc + zeta_sc, 
-                 data=sampling.df, family=gaussian())
-pp_check(fit)
 
 fit <- mod$sample(data=sampling_hydro.data,
                   chains=4, parallel_chains=4,
