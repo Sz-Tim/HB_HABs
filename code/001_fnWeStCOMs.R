@@ -4,14 +4,8 @@
 
 
 
-loadMesh <- function(path) {
-  if(grepl("WestCOMS2", path)) {
-    mesh <- nc_open("D:\\hydroOut\\WestCOMS2_Mesh.nc") 
-  } else if (grepl("minch", path) || grepl("WestCOMS_")) {
-    mesh <- nc_open("D:\\hydroOut\\WestCOMS_meshOS.nc")
-  } else {
-    stop(simpleError("Hydrodynamic data must be WestCOMS2 or minch"))
-  }
+loadMesh <- function(mesh.f) {
+  mesh <- nc_open(str_replace(mesh.f, "gpkg", "nc"))
 }
 
 
