@@ -20,8 +20,8 @@ westcoms.dir <- ifelse(.Platform$OS.type=="unix",
                        "/media/archiver/common/sa01da-work/WeStCOMS2/Archive/",
                        "D:\\hydroOut\\WestCOMS2\\Archive\\")
 mesh.f <- ifelse(.Platform$OS.type=="unix",
-                 "/home/sa04ts/FVCOM_meshes/WeStCOMS2_Mesh.gpkg",
-                 "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
+                 "/home/sa04ts/FVCOM_meshes/WeStCOMS2_mesh.gpkg",
+                 "..\\..\\01_FVCOM\\data\\WeStCOMS2_mesh.gpkg")
 
 
 fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>% 
