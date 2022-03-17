@@ -54,24 +54,33 @@ addCoords <- function(sampling.df, mesh, elems, trinodes) {
 
 
 
-
-findElement <- function(site.xy, mesh.sf) {
+loadHydroVars <- function(sampling.df, i_date, site_trinode, westcoms.dir, sep) {
+  library(ncdf4); library(tidyverse); library(glue)
+  i_rows <- which(sampling.df$dateChar == i_date)
+  i_dir <- glue("{westcoms.dir}{sep}netcdf_{str_sub(i_date,1,4)}")
+  hydro.f <- dir(i_dir, i_date)
+  i_nc <- nc_open(glue("{i_dir}{sep}{hydro.f}"))
+  short_wave <- meanOfNodes(ncvar_get(i_nc, "short_wave"), site_trinode)
+  temp <- meanOfNodes(ncvar_get(i_nc, "temp"), site_trinode)
+  zeta <- meanOfNodes(ncvar_get(i_nc, "zeta"), site_trinode)
+  waterDepth <- zeta + c(meanOfNodes(ncvar_get(i_nc, "h"), site_trinode))
+  siglay <- abs(ncvar_get(i_nc, "siglay")[1,])
+  nc_close(i_nc)
   
-  return(site.elem)
-}
-
-
-
-findTrinodes <- function(site.elem=NULL, mesh.sf, site.xy=NULL) {
-  if(is.null(site.elem)) {
-    if(is.null(site.xy)) {
-      stop("Error: must provide site coordinates or mesh element ids")
-    }
-    
-    
+  for(j in i_rows) {
+    sampling.df$short_wave[j] <- integrateShortWave(short_wave, 
+                                                    sampling.df$site[j], 
+                                                    sampling.df$time[j])
+    sampling.df$zeta[j] <- zeta[sampling.df$site[j],sampling.df$hour[j]]
+    j_siglay <- which.min(abs(waterDepth[sampling.df$site[j]] * siglay - 
+                                sampling.df$depth[j]))
+    sampling.df$temp[j] <- temp[sampling.df$site[j],j_siglay, sampling.df$hour[j]]
   }
-  return(site.trinodes)
+  
+  return(sampling.df)
 }
+
+
 
 
 
