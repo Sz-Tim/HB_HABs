@@ -36,7 +36,7 @@ makeSimSamples <- function(par.ls, westcoms.dir=NULL, mesh.f=NULL, site.xy=NULL,
 
   # extract element IDs, trinodes for each observation
   mesh.sf <- st_read(mesh.f)
-  mesh <- loadMesh(westcoms.dir)
+  mesh <- loadMesh(mesh.f)
   site.xy <- site.xy %>% 
     st_as_sf(coords=c("lon", "lat"), remove=F, crs=27700) %>% 
     st_join(., mesh.sf) %>% 
