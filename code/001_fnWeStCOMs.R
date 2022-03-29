@@ -103,8 +103,8 @@ integrateShortWave <- function(nc.var, rowNum, endTime, startTime=0) {
   # short_wave units = joules/s
   hourlyJoules <- rep(0, ceiling(endTime)-floor(startTime))
   for(hour in seq_along(hourlyJoules)) {
-    varStart <- nc.var[rowNum,hour+1] # indexes = 1:24, hours = 0:23
-    varEnd <- nc.var[rowNum,hour+2]
+    varStart <- nc.var[rowNum,hour] # indexes = 1:24, hours = 0:23
+    varEnd <- nc.var[rowNum,hour+1]
     dt <- 3600
     if(hour == ceiling(endTime)) {
       propHour <- endTime %% 1

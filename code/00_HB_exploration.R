@@ -43,7 +43,7 @@ fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>%
          date_collected=date(datetime_collected),
          year=year(date_collected),
          month=month(date_collected),
-         hour=hour(datetime_collected),
+         hour=pmin(20, pmax(5, hour(datetime_collected))),
          minutes=minute(datetime_collected),
          grid=if_else(date_collected < "2019-04-01", "minch2", "WeStCOMS2")) %>%
   filter(datetime_collected >= "2013-06-20") %>% 
@@ -117,6 +117,7 @@ write_csv(sampling.df, glue("data{sep}obs_df.csv"))
 
 # prepare model -----------------------------------------------------------
 
+sampling.df <- read_csv(glue("data{sep}obs_df.csv"))
 samp.mx <- model.matrix(~ 0 + time_sc + I(time_sc^2) + 
                           short_wave_sc + zeta_sc + temp_sc + mode, 
                         data=sampling.df)
