@@ -27,18 +27,24 @@ knitr::opts_knit$set(root.dir=rprojroot::find_rstudio_root_file())
 
 ```{r setup_workspace, include=FALSE, message=FALSE, warning=FALSE}
 # libraries, functions, directories
-pkgs <- c("tidyverse", "lubridate", "LaplacesDemon", "ncdf4", "sf",
+pkgs <- c("tidyverse", "lubridate", "LaplacesDemon", "ncdf4", "sf", "glue",
           "cmdstanr", "bayesplot", "posterior", "jsonlite")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "00[0-9]_fn", full.names=T), source)
-sep <- ifelse(.Platform$OS.type=="unix", "/", "\\")
-westcoms.dir <- ifelse(.Platform$OS.type=="unix",
-                       "/media/archiver/common/sa01da-work/WeStCOMS2/Archive/",
-                       "D:\\hydroOut\\WestCOMS2\\Archive\\")
-mesh.f <- ifelse(.Platform$OS.type=="unix",
-                 "/home/sa04ts/FVCOM_meshes/WeStCOMS2_Mesh.gpkg",
-                 "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
+# minch2:    2013-06-20 to 2019-07-02
+# WeStCOMS2: 2019-04-01 to 2022-01-26
+if(.Platform$OS.type=="unix") {
+  sep <- "/"
+  westcoms.dir <- c("/media/archiver/common/sa01da-work/WeStCOMS2/Archive/")
+  mesh.f <- c("/home/sa04ts/FVCOM_meshes/WeStCOMS2_Mesh.gpkg")
+} else {
+  sep <- "\\"
+  westcoms.dir <- c("D:\\hydroOut\\minch2\\Archive\\",
+                    "D:\\hydroOut\\WestCOMS2\\Archive\\")
+  mesh.f <- c("..\\..\\01_FVCOM\\data\\WeStCOMS_Mesh.gpkg",
+              "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
+}
 ```
 
 
@@ -50,14 +56,22 @@ fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>%
   filter(easting > 0 & northing > 0) %>%
   filter(!is.na(date_collected)) %>%
   filter(karenia_mikimotoi >= 0) %>% # -99 in karenia...?
-  mutate(date_collected=date(date_collected),
+  mutate(datetime_collected=as_datetime(date_collected),
+         date_collected=date(datetime_collected),
          year=year(date_collected),
          month=month(date_collected),
+         hour=hour(datetime_collected),
+         minutes=minute(datetime_collected),
          yday=yday(date_collected),
          ydayCos=cos(yday/365),
          ydaySin=sin(yday/365),
-         x_y=paste0(easting, "_", northing)) %>%
-  filter(year > 2019 & year < 2022)
+         x_y=paste0(easting, "_", northing),
+         grid=if_else(date_collected < "2019-04-01", "minch2", "WeStCOMS2")) %>%
+  filter(datetime_collected >= "2013-06-20") %>% 
+  group_by(sin, area, site) %>% 
+  mutate(lon=mean(easting), lat=mean(northing)) %>%
+  ungroup %>% 
+  mutate(site.id=as.numeric(factor(paste(sin, area, site))))
 fsa.sf <- st_as_sf(fsa.df, coords=c("easting", "northing"), crs=st_crs(27700))
 ```
 
@@ -224,9 +238,7 @@ Instead of directly using the reported tidal state and time, we can make these m
 
 ```{r sampling_hydro_sim}
 hydro.par <- setSimParams(nDays=29)
-site.xy <- fsa.df %>% group_by(sin, area, site) %>% 
-  summarise(lon=mean(easting), lat=mean(northing))
-sampling.df <- makeSimSamples(hydro.par, westcoms.dir, mesh.f, site.xy, sep)
+sampling.df <- makeSimSamples(hydro.par, westcoms.dir, mesh.f, fsa.df, sep)
 
 betas <- tibble(parameter=paste0("beta[", 1:8, "]"),
                 value=c(0.3,  # time
