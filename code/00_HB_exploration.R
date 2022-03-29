@@ -19,8 +19,10 @@ walk(dir("code", "00[0-9]_fn", full.names=T), source)
 # WeStCOMS2: 2019-04-01 to 2022-01-26
 if(.Platform$OS.type=="unix") {
   sep <- "/"
-  westcoms.dir <- c("/media/archiver/common/sa01da-work/WeStCOMS2/Archive/")
-  mesh.f <- c("/home/sa04ts/FVCOM_meshes/WeStCOMS2_Mesh.gpkg")
+  westcoms.dir <- c("/media/archiver/common/sa01da-work/minch2/Archive/",
+                    "/media/archiver/common/sa01da-work/WeStCOMS2/Archive/")
+  mesh.f <- c("/home/sa04ts/FVCOM_meshes/WeStCOMS_mesh.gpkg",
+              "/home/sa04ts/FVCOM_meshes/WeStCOMS2_mesh.gpkg")
 } else {
   sep <- "\\"
   westcoms.dir <- c("D:\\hydroOut\\minch2\\Archive\\",
@@ -60,20 +62,20 @@ fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>%
 
 par.ls <- setSimParams()
 # generate sampling details and lnlambdas
-sampling.df <- obs.df %>% 
+sampling.df <- fsa.df %>% 
   mutate(date=date_collected,
          dateChar=str_remove_all(date, "-"),
          time=hour + minutes/60,
          mode=sample(par.ls$modes, n(), T, c(0.7, 0.2, 0.1)),
          depth=sample(par.ls$depths, n(), T),
          tides=sample(par.ls$tides, n(), T, c(0.2, 0.05, 0.5, 0.05, 0.3)),
-         lnlambda=rnorm(n(), lnlambda_prior[1], lnlambda_prior[2]),
+         lnlambda=rnorm(n(), 7, 2),
          lnlambdap1=log(exp(lnlambda)+1))
 
 # extract element IDs, trinodes for each observation
 mesh.sf <- map(mesh.f, st_read)
 mesh <- map(mesh.f, loadMesh)
-site.xy <- obs.df %>% select("grid", "site.id", "lon", "lat") %>%
+site.xy <- fsa.df %>% select("grid", "site.id", "lon", "lat") %>%
   group_by(grid, site.id) %>% slice_head(n=1) %>%
   group_by(grid) %>%
   group_split() %>%
@@ -88,6 +90,7 @@ site.xy <- obs.df %>% select("grid", "site.id", "lon", "lat") %>%
   bind_rows
 sampling.df <- sampling.df %>%
   right_join(., site.xy, by=c("grid", "site.id", "lon", "lat")) %>%
+  mutate(short_wave=NA_real_, zeta=NA_real_, temp=NA_real_) %>%
   group_by(grid) %>% group_split
 site_trinode <- map2(.x=mesh, .y=sampling.df,
                      ~ncvar_get(.x, "trinodes")[.y$site.elem,])
