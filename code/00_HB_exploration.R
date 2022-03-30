@@ -45,8 +45,8 @@ fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>%
          month=month(date_collected),
          hour=pmin(20, pmax(5, hour(datetime_collected))),
          minutes=minute(datetime_collected),
-         grid=if_else(date_collected < "2019-04-01", "minch2", "WeStCOMS2")) %>%
-  filter(datetime_collected >= "2013-06-20") %>% 
+         grid=if_else(date_collected < "2019-05-01", "minch2", "WeStCOMS2")) %>%
+  filter(datetime_collected >= "2013-07-20") %>% 
   group_by(sin, area, site) %>% 
   mutate(lon=mean(easting), lat=mean(northing)) %>%
   ungroup %>% 
@@ -104,12 +104,13 @@ for(grid in 1:2) {
     date_i <- sampling_dates[i]
     rows_i <-  which(sampling.df[[grid]]$dateChar == date_i)
     hydroVars.ls[[i]] <- loadHydroVars(date_i, 
+                                       site_trinode[[grid]][rows_i,], 
                                        sampling.df[[grid]]$hour[rows_i],
                                        sampling.df[[grid]]$depth[rows_i],
-                                       site_trinode[[grid]][rows_i,], 
                                        westcoms.dir[[grid]], 
                                        sep, 
-                                       vars=c("temp", "short_wave", "zeta")) %>%
+                                       vars=c("temp", "short_wave", "zeta"), 
+                                       lag=2) %>%
       mutate(rows=rows_i)
   }
   sampling.df[[grid]] <- sampling.df[[grid]] %>%
@@ -127,19 +128,31 @@ write_csv(sampling.df, glue("data{sep}obs_df.csv"))
 
 
 # prepare model -----------------------------------------------------------
-
-sampling.df <- read_csv(glue("data{sep}obs_df.csv"))
-samp.mx <- model.matrix(~ 0 + time_sc + I(time_sc^2) + 
-                          short_wave_sc + zeta_sc + temp_sc + mode, 
-                        data=sampling.df)
-
-mod <- cmdstan_model(glue("models{sep}00_sampling_simple.stan"))
-sampling_hydro.data <- list(
-  N=nrow(sampling.df),
-  X=samp.mx,
-  nCov=ncol(samp.mx),
-  y=round(sampling.df$pseudo_nitzschia_sp)
-)
+# 
+# sampling.df <- read_csv(glue("data{sep}obs_df.csv")) %>% 
+#   mutate(target_sp=round(alexandrium_sp/20)) %>%
+#   # filter(target_sp > 20) %>%
+#   mutate(#short_wave=log(short_wave+1),
+#          yday=yday(date_collected),
+#          ydayCos=cos(2*pi*yday/365),
+#          ydaySin=sin(2*pi*yday/365)) %>%
+#   mutate(across(one_of("time", "depth", "tides", "short_wave", "zeta", "temp"), 
+#                 CenterScale, 
+#                 .names="{.col}_sc"))
+#   
+# samp.mx <- model.matrix(~ 0 + time_sc + I(time_sc^2) + 
+#                           short_wave_sc + zeta_sc + temp_sc, 
+#                         data=sampling.df)
+# 
+# mod <- cmdstan_model(glue("models{sep}00_sampling_simple.stan"))
+# sampling_hydro.data <- list(
+#   N=nrow(sampling.df),
+#   X=samp.mx,
+#   nCov=ncol(samp.mx),
+#   y=sampling.df$target_sp,
+#   prior_ln_lambda=c(mean(log(sampling.df$target_sp)), 
+#                     sd(log(sampling.df$target_sp)))
+# )
 
 
 
@@ -148,14 +161,52 @@ sampling_hydro.data <- list(
 
 # run model ---------------------------------------------------------------
 
-fit <- mod$sample(data=sampling_hydro.data,
-                  chains=4, parallel_chains=4,
-                  max_treedepth=20,
-                  refresh=500, iter_sampling=2000)
-fit$cmdstan_diagnose()
-out.sum <- fit$summary()
-
-# I think these values are too large for a poisson distribution and that I
-# should consider alternatives. For example, a hurdle model with a normal
-# distribution using log-transformed values might be an ok solution.
-
+# fit <- mod$sample(data=sampling_hydro.data,
+#                   chains=4, parallel_chains=4,
+#                   max_treedepth=20,
+#                   refresh=500, iter_sampling=2000)
+# fit$cmdstan_diagnose()
+# out.sum <- fit$summary()
+# 
+# mcmc_areas(fit$draws("beta")) + scale_y_discrete(labels=colnames(samp.mx))
+# ppc_dens_overlay(y=log(sampling_hydro.data$y+1),
+#                  yrep=log(fit$draws("y_pred", format="matrix")[1:100,]+1))
+# 
+# out.df <- sampling.df %>% 
+#   mutate(lnlambda_mean=filter(out.sum, grepl("ln_lambda", variable))$mean,
+#          lnlambda_q5=filter(out.sum, grepl("ln_lambda", variable))$q5,
+#          lnlambda_q95=filter(out.sum, grepl("ln_lambda", variable))$q95)
+# ggplot(out.df, aes(log(target_sp), lnlambda_mean)) + geom_point() +
+#   geom_linerange(aes(ymin=lnlambda_q5, ymax=lnlambda_q95)) +
+#   geom_abline()
+# ggplot(out.df, aes(target_sp, exp(lnlambda_mean))) + geom_point() +
+#   geom_linerange(aes(ymin=exp(lnlambda_q5), ymax=exp(lnlambda_q95))) +
+#   geom_abline()
+# 
+# ggplot(out.df, aes(temp_sc, log(target_sp)-lnlambda_mean)) + 
+#   geom_point()
+# ggplot(out.df, aes(time_sc, log(target_sp)-lnlambda_mean)) + 
+#   geom_point()
+# ggplot(out.df, aes(short_wave_sc, log(target_sp)-lnlambda_mean)) + 
+#   geom_point()
+# ggplot(out.df, aes(zeta_sc, log(target_sp)-lnlambda_mean)) + 
+#   geom_point()
+# 
+# 
+# 
+# # Is this doing *anything* besides shrinking values toward the mean?
+# 
+# 
+# library(brms)
+# out <- brm(bf(target_sp ~ short_wave_sc + zeta_sc + temp_sc + ydayCos + ydaySin +
+#              temp_sc:short_wave_sc +  short_wave_sc:ydayCos + temp_sc:ydayCos +
+#              (1|site.id),
+#              zi ~ temp_sc + ydayCos + ydaySin +
+#                (1|site.id)), 
+#            data=sampling.df, family=zero_inflated_negbinomial(), cores=4)
+# pp_check(out)
+# plot(conditional_effects(out), points=T, point_args=list(shape=1, alpha=0.5, size=0.75))
+# # I think these values are too large for a poisson distribution and that I
+# # should consider alternatives. For example, a hurdle model with a normal
+# # distribution using log-transformed values might be an ok solution.
+# 
