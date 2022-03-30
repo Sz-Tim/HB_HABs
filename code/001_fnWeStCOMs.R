@@ -47,6 +47,9 @@ addCoords <- function(sampling.df, mesh, elems, trinodes) {
 }
 
 
+
+
+
 loadHydroVars <- function(date, trinodes, hours, depths, westcoms.dir, sep, 
                           vars=c("temp", "short_wave", "zeta"), 
                           lags=NULL, dayAvg=FALSE) {
@@ -129,31 +132,6 @@ loadHydroVars <- function(date, trinodes, hours, depths, westcoms.dir, sep,
 }
 
 
-# loadHydroVars <- function(sampling.df, i_date, site_trinode, westcoms.dir, sep) {
-#   # library(ncdf4); library(tidyverse); library(glue)
-#   # i_rows <- which(sampling.df$dateChar == i_date)
-#   # i_dir <- glue("{westcoms.dir}{sep}netcdf_{str_sub(i_date,1,4)}")
-#   # hydro.f <- dir(i_dir, i_date)
-#   # i_nc <- nc_open(glue("{i_dir}{sep}{hydro.f}"))
-#   # short_wave <- meanOfNodes(ncvar_get(i_nc, "short_wave"), site_trinode) # Really inefficient: extract only needed rows!
-#   # temp <- meanOfNodes(ncvar_get(i_nc, "temp"), site_trinode)
-#   # zeta <- meanOfNodes(ncvar_get(i_nc, "zeta"), site_trinode)
-#   # waterDepth <- zeta + c(meanOfNodes(ncvar_get(i_nc, "h"), site_trinode))
-#   # siglay <- abs(ncvar_get(i_nc, "siglay")[1,])
-#   # nc_close(i_nc)
-#   
-#   for(j in i_rows) {
-#     # indexes = 1:24, hours = 0:23
-#     sampling.df$short_wave[j] <- integrateShortWave(short_wave, 
-#                                                     j, 
-#                                                     sampling.df$time[j])
-#     # sampling.df$zeta[j] <- zeta[j,sampling.df$hour[j]+1]
-#     # j_siglay <- which.min(abs(waterDepth[j] * siglay - sampling.df$depth[j]))
-#     # sampling.df$temp[j] <- temp[j,j_siglay, sampling.df$hour[j]+1]
-#   }
-#   
-#   return(sampling.df)
-# }
 
 
 
@@ -165,13 +143,13 @@ meanOfNodes <- function(nc.ar, node.mx) {
     node2 <- nc.ar[node.mx[,2]]
     node3 <- nc.ar[node.mx[,3]]
   } else if(length(dim(nc.ar))==2) {
-    node1 <- nc.ar[node.mx[,1],]
-    node2 <- nc.ar[node.mx[,2],]
-    node3 <- nc.ar[node.mx[,3],]
+    node1 <- nc.ar[node.mx[,1],,drop=F]
+    node2 <- nc.ar[node.mx[,2],,drop=F]
+    node3 <- nc.ar[node.mx[,3],,drop=F]
   } else if(length(dim(nc.ar))==3) {
-    node1 <- nc.ar[node.mx[,1],,]
-    node2 <- nc.ar[node.mx[,2],,]
-    node3 <- nc.ar[node.mx[,3],,]
+    node1 <- nc.ar[node.mx[,1],,,drop=F]
+    node2 <- nc.ar[node.mx[,2],,,drop=F]
+    node3 <- nc.ar[node.mx[,3],,,drop=F]
   }
   return((node1 + node2 + node3)/3)
 }
