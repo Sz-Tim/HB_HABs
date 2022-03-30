@@ -98,7 +98,7 @@ loadHydroVars <- function(date, trinodes, hours, depths, westcoms.dir, sep,
       }
       
       # [elem, layer, hour]
-      if(vars[v] %in% c("temp")) {
+      if(vars[v] %in% c("temp", "u", "v")) {
         if(dayAvg | i > 1) {
           # average temperature at a given depth
           siglays <- apply(depths/waterDepth, 1:2, function(x) which.min(abs(siglay - x)))
@@ -114,7 +114,7 @@ loadHydroVars <- function(date, trinodes, hours, depths, westcoms.dir, sep,
       }
       
       # [elem, hour]
-      if(vars[v] %in% c("zeta")) {
+      if(vars[v] %in% c("zeta", "uwind_speed", "vwind_speed")) {
         if(dayAvg | i > 1) {
           out[[name_vi]] <- rowMeans(hydro_temp[[vars[v]]])
         } else {
