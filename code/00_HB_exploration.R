@@ -99,7 +99,7 @@ walk(mesh, nc_close)
 # load relevant data
 for(grid in 1:2) {
   sampling_dates <- unique(sampling.df[[grid]]$dateChar)
-  hydrovars.ls <- vector("list", length(sampling_dates))
+  hydroVars.ls <- vector("list", length(sampling_dates))
   for(i in 1:length(sampling_dates)) {
     date_i <- sampling_dates[i]
     rows_i <-  which(sampling.df[[grid]]$dateChar == date_i)
@@ -109,7 +109,9 @@ for(grid in 1:2) {
                                        sampling.df[[grid]]$depth[rows_i],
                                        westcoms.dir[[grid]], 
                                        sep, 
-                                       vars=c("temp", "short_wave", "zeta"), 
+                                       vars=c("temp", "short_wave", "zeta", 
+                                              "uwind_speed", "vwind_speed", 
+                                              "u", "v"), 
                                        lag=2) %>%
       mutate(rows=rows_i)
   }
