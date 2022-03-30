@@ -47,32 +47,113 @@ addCoords <- function(sampling.df, mesh, elems, trinodes) {
 }
 
 
-
-loadHydroVars <- function(sampling.df, i_date, site_trinode, westcoms.dir, sep) {
+loadHydroVars <- function(date, trinodes, hours, depths, westcoms.dir, sep, 
+                          vars=c("temp", "short_wave", "zeta"), 
+                          lags=NULL, dayAvg=FALSE) {
   library(ncdf4); library(tidyverse); library(glue)
-  i_rows <- which(sampling.df$dateChar == i_date)
-  i_dir <- glue("{westcoms.dir}{sep}netcdf_{str_sub(i_date,1,4)}")
-  hydro.f <- dir(i_dir, i_date)
-  i_nc <- nc_open(glue("{i_dir}{sep}{hydro.f}"))
-  short_wave <- meanOfNodes(ncvar_get(i_nc, "short_wave"), site_trinode)
-  temp <- meanOfNodes(ncvar_get(i_nc, "temp"), site_trinode)
-  zeta <- meanOfNodes(ncvar_get(i_nc, "zeta"), site_trinode)
-  waterDepth <- zeta + c(meanOfNodes(ncvar_get(i_nc, "h"), site_trinode))
-  siglay <- abs(ncvar_get(i_nc, "siglay")[1,])
-  nc_close(i_nc)
+  elems <- 1:nrow(trinodes)
   
-  for(j in i_rows) {
-    # indexes = 1:24, hours = 0:23
-    sampling.df$short_wave[j] <- integrateShortWave(short_wave, 
-                                                    j, 
-                                                    sampling.df$time[j])
-    sampling.df$zeta[j] <- zeta[j,sampling.df$hour[j]+1]
-    j_siglay <- which.min(abs(waterDepth[j] * siglay - sampling.df$depth[j]))
-    sampling.df$temp[j] <- temp[j,j_siglay, sampling.df$hour[j]+1]
+  # date = lag_0; date - n = lag_n 
+  if(is.null(lags)) {
+    vars_all <- paste0(vars, "_lag_0")
+    dates <- date
+  } else {
+    vars_all <- unlist(map(0:lags, ~paste0(vars, "_lag_", .x)))
+    dates <- map_chr(0:lags, ~str_remove_all(ymd(date)-.x, "-"))
   }
   
-  return(sampling.df)
+  out <- vector("list", length(vars_all)) %>% setNames(vars_all)
+  hydro_temp <- vector("list", length(vars)) %>% setNames(vars)
+  
+  for(i in seq_along(dates)) {
+    
+    # load data for focal elements for each date from 0:lags
+    dir_i <- glue("{westcoms.dir}{sep}netcdf_{str_sub(dates[i],1,4)}")
+    file_i <- dir(dir_i, dates[i])
+    nc_i <- nc_open(glue("{dir_i}{sep}{file_i}"))
+    for(v in seq_along(vars)) {
+      hydro_temp[[vars[v]]] <- meanOfNodes(ncvar_get(nc_i, vars[v]), trinodes)
+    }
+    waterDepth <- c(meanOfNodes(ncvar_get(nc_i, "h"), trinodes))
+    siglay <- abs(ncvar_get(nc_i, "siglay")[1,])
+    if("zeta" %in% vars) {
+      waterDepth <- hydro_temp[["zeta"]] + waterDepth
+    }
+    nc_close(nc_i)
+    
+    # calculate and extract appropriate values for each element
+    for(v in seq_along(vars)) {
+      name_vi <- glue("{vars[v]}_lag_{i-1}")
+      # indexes = 1:24, hours = 0:23
+      
+      # short_wave: integrate
+      if(vars[v]=="short_wave") {
+        if(dayAvg | i > 1) {
+          out[[name_vi]] <- map_dbl(elems,
+                                    ~integrateShortWave(hydro_temp[[vars[v]]], .x, 23)) 
+        } else {
+          out[[name_vi]] <- map_dbl(elems,
+                                    ~integrateShortWave(hydro_temp[[vars[v]]], .x, hours[.x])) 
+        }
+      }
+      
+      # [elem, layer, hour]
+      if(vars[v] %in% c("temp")) {
+        if(dayAvg | i > 1) {
+          # average temperature at a given depth
+          siglays <- apply(depths/waterDepth, 1:2, function(x) which.min(abs(siglay - x)))
+          indexes <- cbind(rep(elems, 24), c(siglays), rep(1:24, each=length(elems)))
+          out[[name_vi]] <- rowMeans(matrix(hydro_temp[["temp"]][indexes], nrow=length(elems)))
+        } else {
+          indexes <- cbind(elems, hours+1)
+          siglays <- apply(cbind(waterDepth[indexes]) %*% rbind(siglay) - depths,
+                           1, function(x) which.min(abs(x)))
+          indexes <- cbind(elems, siglays, hours+1)
+          out[[name_vi]] <- hydro_temp[[vars[v]]][indexes] 
+        }
+      }
+      
+      # [elem, hour]
+      if(vars[v] %in% c("zeta")) {
+        if(dayAvg | i > 1) {
+          out[[name_vi]] <- rowMeans(hydro_temp[[vars[v]]])
+        } else {
+          indexes <- cbind(elems, hours+1)
+          out[[name_vi]] <- hydro_temp[[vars[v]]][indexes]
+        }
+      }
+    }
+  }
+  
+  return(as_tibble(out))
 }
+
+
+# loadHydroVars <- function(sampling.df, i_date, site_trinode, westcoms.dir, sep) {
+#   # library(ncdf4); library(tidyverse); library(glue)
+#   # i_rows <- which(sampling.df$dateChar == i_date)
+#   # i_dir <- glue("{westcoms.dir}{sep}netcdf_{str_sub(i_date,1,4)}")
+#   # hydro.f <- dir(i_dir, i_date)
+#   # i_nc <- nc_open(glue("{i_dir}{sep}{hydro.f}"))
+#   # short_wave <- meanOfNodes(ncvar_get(i_nc, "short_wave"), site_trinode) # Really inefficient: extract only needed rows!
+#   # temp <- meanOfNodes(ncvar_get(i_nc, "temp"), site_trinode)
+#   # zeta <- meanOfNodes(ncvar_get(i_nc, "zeta"), site_trinode)
+#   # waterDepth <- zeta + c(meanOfNodes(ncvar_get(i_nc, "h"), site_trinode))
+#   # siglay <- abs(ncvar_get(i_nc, "siglay")[1,])
+#   # nc_close(i_nc)
+#   
+#   for(j in i_rows) {
+#     # indexes = 1:24, hours = 0:23
+#     sampling.df$short_wave[j] <- integrateShortWave(short_wave, 
+#                                                     j, 
+#                                                     sampling.df$time[j])
+#     # sampling.df$zeta[j] <- zeta[j,sampling.df$hour[j]+1]
+#     # j_siglay <- which.min(abs(waterDepth[j] * siglay - sampling.df$depth[j]))
+#     # sampling.df$temp[j] <- temp[j,j_siglay, sampling.df$hour[j]+1]
+#   }
+#   
+#   return(sampling.df)
+# }
 
 
 

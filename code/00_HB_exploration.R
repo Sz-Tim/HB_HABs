@@ -99,10 +99,21 @@ walk(mesh, nc_close)
 # load relevant data
 for(grid in 1:2) {
   sampling_dates <- unique(sampling.df[[grid]]$dateChar)
+  hydrovars.ls <- vector("list", length(sampling_dates))
   for(i in 1:length(sampling_dates)) {
-    sampling.df[[grid]] <- sampling.df[[grid]] %>%
-      loadHydroVars(sampling_dates[i], site_trinode[[grid]], westcoms.dir[[grid]], sep)
+    date_i <- sampling_dates[i]
+    rows_i <-  which(sampling.df[[grid]]$dateChar == date_i)
+    hydroVars.ls[[i]] <- loadHydroVars(date_i, 
+                                       sampling.df[[grid]]$hour[rows_i],
+                                       sampling.df[[grid]]$depth[rows_i],
+                                       site_trinode[[grid]][rows_i,], 
+                                       westcoms.dir[[grid]], 
+                                       sep, 
+                                       vars=c("temp", "short_wave", "zeta")) %>%
+      mutate(rows=rows_i)
   }
+  sampling.df[[grid]] <- sampling.df[[grid]] %>%
+    bind_cols(do.call(rbind, hydrovars.ls) %>% arrange(rows))
 }
 sampling.df <- sampling.df %>%
   bind_rows %>%
