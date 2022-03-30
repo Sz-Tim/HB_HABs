@@ -118,11 +118,6 @@ for(grid in 1:2) {
   sampling.df[[grid]] <- sampling.df[[grid]] %>%
     bind_cols(do.call(rbind, hydroVars.ls) %>% arrange(rows))
 }
-sampling.df <- sampling.df %>%
-  bind_rows %>%
-  mutate(across(one_of("time", "depth", "tides", "short_wave", "zeta", "temp"), 
-                CenterScale, 
-                .names="{.col}_sc"))
 
 write_csv(sampling.df, glue("data{sep}obs_df.csv"))
 
