@@ -104,7 +104,7 @@ for(grid in 1:2) {
     date_i <- sampling_dates[i]
     rows_i <-  which(sampling.df[[grid]]$dateChar == date_i)
     hydroVars.ls[[i]] <- loadHydroVars(date_i, 
-                                       site_trinode[[grid]][rows_i,], 
+                                       site_trinode[[grid]][rows_i,,drop=F], 
                                        sampling.df[[grid]]$hour[rows_i],
                                        sampling.df[[grid]]$depth[rows_i],
                                        westcoms.dir[[grid]], 
@@ -116,7 +116,7 @@ for(grid in 1:2) {
       mutate(rows=rows_i)
   }
   sampling.df[[grid]] <- sampling.df[[grid]] %>%
-    bind_cols(do.call(rbind, hydrovars.ls) %>% arrange(rows))
+    bind_cols(do.call(rbind, hydroVars.ls) %>% arrange(rows))
 }
 sampling.df <- sampling.df %>%
   bind_rows %>%
