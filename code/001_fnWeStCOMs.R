@@ -103,7 +103,7 @@ loadHydroVars <- function(date, trinodes, hours, depths, westcoms.dir, sep,
           # average temperature at a given depth
           siglays <- apply(depths/waterDepth, 1:2, function(x) which.min(abs(siglay - x)))
           indexes <- cbind(rep(elems, 24), c(siglays), rep(1:24, each=length(elems)))
-          out[[name_vi]] <- rowMeans(matrix(hydro_temp[["temp"]][indexes], nrow=length(elems)))
+          out[[name_vi]] <- rowMeans(matrix(hydro_temp[[vars[v]]][indexes], nrow=length(elems)))
         } else {
           indexes <- cbind(elems, hours+1)
           siglays <- apply(cbind(waterDepth[indexes]) %*% rbind(siglay) - depths,
