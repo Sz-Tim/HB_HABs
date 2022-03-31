@@ -61,11 +61,7 @@ makeSimSamples <- function(par.ls, westcoms.dir=NULL, mesh.f=NULL,
         loadHydroVars(sampling_dates[i], site_trinode[[grid]], westcoms.dir[[grid]], sep)
     }
   }
-  sampling.df <- sampling.df %>%
-    bind_rows %>%
-    mutate(across(one_of("time", "depth", "tides", "short_wave", "zeta", "temp"), 
-                  CenterScale, 
-                  .names="{.col}_sc"))
+  sampling.df <- sampling.df %>% bind_rows
   
   return(sampling.df)
 }
