@@ -50,7 +50,7 @@ fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>%
   group_by(sin, area, site) %>% 
   mutate(lon=mean(easting), lat=mean(northing)) %>%
   ungroup %>% 
-  mutate(site.id=as.numeric(factor(paste(sin, area, site))))
+  mutate(site.id=as.numeric(factor(paste(sin, area, site)))) 
 
 
 
@@ -90,16 +90,17 @@ site.xy <- fsa.df %>% select("grid", "site.id", "lon", "lat") %>%
   bind_rows
 sampling.df <- sampling.df %>%
   right_join(., site.xy, by=c("grid", "site.id", "lon", "lat")) %>%
-  mutate(short_wave=NA_real_, zeta=NA_real_, temp=NA_real_) %>%
   group_by(grid) %>% group_split
 site_trinode <- map2(.x=mesh, .y=sampling.df,
                      ~ncvar_get(.x, "trinodes")[.y$site.elem,])
 walk(mesh, nc_close)
 
 # load relevant data
+out.df <- vector("list", 2)
 for(grid in 1:2) {
   sampling_dates <- unique(sampling.df[[grid]]$dateChar)
   hydroVars.ls <- vector("list", length(sampling_dates))
+  pb <- txtProgressBar(max=length(sampling_dates))
   for(i in 1:length(sampling_dates)) {
     date_i <- sampling_dates[i]
     rows_i <-  which(sampling.df[[grid]]$dateChar == date_i)
@@ -112,14 +113,16 @@ for(grid in 1:2) {
                                        vars=c("temp", "short_wave", "zeta", 
                                               "uwind_speed", "vwind_speed", 
                                               "u", "v"), 
-                                       lag=2) %>%
+                                       lag=5) %>%
       mutate(rows=rows_i)
+    setTxtProgressBar(pb, i)
   }
-  sampling.df[[grid]] <- sampling.df[[grid]] %>%
+  out.df[[grid]] <- sampling.df[[grid]] %>%
     bind_cols(do.call(rbind, hydroVars.ls) %>% arrange(rows))
 }
 
-write_csv(sampling.df, glue("data{sep}obs_df.csv"))
+
+write_csv(do.call('rbind', out.df), glue("data{sep}obs_df.csv"))
 
 
 
