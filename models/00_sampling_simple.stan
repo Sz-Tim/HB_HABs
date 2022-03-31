@@ -5,6 +5,7 @@ data {
   int<lower=0> nCov;
   matrix[N,nCov] X;
   int<lower=0> y[N];
+  real prior_ln_lambda[2];
 }
 
 parameters {
@@ -14,7 +15,7 @@ parameters {
 
 model {
   beta ~ normal(0, 1);
-  ln_lambda ~ normal(3, 2);
+  ln_lambda ~ normal(prior_ln_lambda[1], prior_ln_lambda[2]);
   
   y ~ poisson_log_glm(X, ln_lambda, beta);
 }
