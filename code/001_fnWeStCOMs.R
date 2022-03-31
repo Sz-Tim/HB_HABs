@@ -72,7 +72,7 @@ loadHydroVars <- function(date, trinodes, hours, depths, westcoms.dir, sep,
     
     # load data for focal elements for each date from 0:lags
     dir_i <- glue("{westcoms.dir}{sep}netcdf_{str_sub(dates[i],1,4)}")
-    file_i <- dir(dir_i, dates[i])
+    file_i <- dir(dir_i, glue("{dates[i]}*.nc$"))
     nc_i <- nc_open(glue("{dir_i}{sep}{file_i}"))
     for(v in seq_along(vars)) {
       hydro_temp[[vars[v]]] <- meanOfNodes(ncvar_get(nc_i, vars[v]), trinodes)
