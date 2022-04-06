@@ -9,8 +9,7 @@
 
 # set up ------------------------------------------------------------------
 
-pkgs <- c("tidyverse", "lubridate", "glue", "ncdf4", "sf", "LaplacesDemon",
-          "brms", "bayesplot", "jsonlite")
+pkgs <- c("tidyverse", "lubridate", "glue", "LaplacesDemon", "brms")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "00[0-9]_fn", full.names=T), source)
@@ -30,27 +29,6 @@ if(.Platform$OS.type=="unix") {
   mesh.f <- c("..\\..\\01_FVCOM\\data\\WeStCOMS_Mesh.gpkg",
               "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
 }
-
-
-fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>% 
-  as_tibble %>% 
-  select(-geom) %>%
-  filter(easting < 4e10) %>% # entry error: Camb - Mid Yell Voe - 2013-04-16 
-  filter(easting > 0 & northing > 0) %>%
-  filter(!is.na(date_collected)) %>%
-  filter(karenia_mikimotoi >= 0) %>% # -99 in karenia...?
-  mutate(datetime_collected=as_datetime(date_collected),
-         date_collected=date(datetime_collected),
-         year=year(date_collected),
-         month=month(date_collected),
-         hour=pmin(20, pmax(5, hour(datetime_collected))),
-         minutes=minute(datetime_collected),
-         grid=if_else(date_collected < "2019-05-01", "minch2", "WeStCOMS2")) %>%
-  filter(datetime_collected >= "2013-07-20") %>% 
-  group_by(sin, area, site) %>% 
-  mutate(lon=mean(easting), lat=mean(northing)) %>%
-  ungroup %>% 
-  mutate(site.id=as.numeric(factor(paste(sin, area, site)))) 
 
 
 
@@ -132,36 +110,38 @@ sampling.df <- read_csv(glue("data{sep}obs_df.csv")) %>%
   mutate(nObs=n(),
          obs_id=row_number()) %>%
   ungroup %>%
-  filter(complete.cases(.))
+  filter(complete.cases(.)) %>%
+  select(site.id, lon, lat, date, year, obs_id, nObs, 
+         starts_with("target_"), starts_with("date_"), starts_with("yday"),
+         ends_with("_wk_sc")) %>%
+  mutate(target_sp_binary=target_cat > 3,
+         wk=floor(as.numeric(date - min(date))/7))
 
 
 
 
 
+# model runs --------------------------------------------------------------
 
-dates <- sort(unique(sampling.df$date_collected))[350:370]
+weeks <- sort(unique(sampling.df$wk))[-c(1:110)]
+out <- vector("list", length(weeks))
 
-for(i in 2:length(dates)) {
-  date_i <- dates[i]
+for(i in 1:length(weeks)) {
+  week_i <- weeks[i]
   train.df <- sampling.df %>%
-    filter(date <= date_i) %>%
-    group_by(site.id) %>%
-    slice_head(n=-1) %>%
-    ungroup
+    filter(wk < week_i)
   test.df <- sampling.df %>%
-    filter(date <= date_i) %>%
-    group_by(site.id) %>%
-    slice_tail(n=1) %>%
-    ungroup %>%
+    filter(wk == week_i) %>%
     filter(site.id %in% train.df$site.id)
-  cat("Starting", i, "--", as.character(date_i), "\n")
+  date_range <- paste(as.character(range(test.df$date)), collapse=" to ")
+  cat("Starting", i, "= week", as.character(week_i), "=", date_range, "\n")
   cat("  train:", nrow(train.df), "rows with", n_distinct(train.df$site.id), "sites\n")
   cat("  test:", nrow(test.df), "rows with", n_distinct(test.df$site.id), "sites\n")
   
   if(i == 1) {
     prior_i <- set_prior("normal(0,2)", class="b")
   } else {
-    post_im1 <- readRDS(glue("temp{sep}out_{dates[i-1]}.rds"))
+    post_im1 <- readRDS(glue("temp{sep}out_{weeks[i-1]}_ord.rds"))
     b_im1 <- as_draws_df(post_im1, variable="b_", regex=T) %>%
       pivot_longer(cols=starts_with("b_"), names_to="param", values_to="val") %>%
       group_by(param) %>%
@@ -169,7 +149,7 @@ for(i in 2:length(dates)) {
       mutate(coef=str_remove(param, "b_"))
     eff_im1 <- b_im1 %>% filter(!grepl("Intercept", param))
     int_im1 <- b_im1 %>% filter(grepl("Intercept", param)) %>%
-      mutate(coef=str_remove(str_remove(coef, "Intercept\\["), "]"))
+      mutate(coef=str_remove(str_remove(str_remove(coef, "Intercept"), "\\["), "]"))
     sd_im1 <- summary(post_im1)$random$site.id
     prior.ls <- vector("list", nrow(b_im1)+1)
     for(j in 1:nrow(int_im1)) {
@@ -185,54 +165,57 @@ for(i in 2:length(dates)) {
     prior_i <- do.call(rbind, prior.ls)
   }
   cat("  Set priors\n")
-  prior_i
   
-  Sys.sleep(2)
-  out <- brm(target_cat ~ 
+  out[[i]] <- brm(target_cat ~
                
-               ydayCos + ydaySin +
-               
-               # short_wave_wk_sc:ydayCos + 
-               # temp_wk_sc:ydayCos +
-               # windDir_wk_sc:ydayCos +
-               # waterDir_wk_sc:ydayCos +
-               
-               target_sp_lag1:target_sp_lag2:target_sp_lag3:ydayCos +
-               
-               target_sp_lagWt1:ydayCos + 
-               target_sp_lagWt2:ydayCos + 
-               target_sp_lagWt3:ydayCos +
-               
-               # target_sp_lag1:date_lag1 + 
-               # target_sp_lag2:date_lag2 +
-               # target_sp_lag3:date_lag3 +
-               target_sp_lag1:date_lag1:ydayCos + 
-               target_sp_lag2:date_lag2:ydayCos + 
-               target_sp_lag3:date_lag3:ydayCos +
-               
-               # target_sp_lagWt1:temp_wk_sc +
-               # target_sp_lagWt1:short_wave_wk_sc + 
-               # target_sp_lagWt1:wind_wk_sc +
-               
-               (1|site.id),
-             data=train.df, family=cumulative(), cores=4,
-             prior=prior_i)
+                    ydayCos + ydaySin +
+                    
+                    short_wave_wk_sc:ydayCos +
+                    temp_wk_sc:ydayCos +
+                    windDir_wk_sc:ydayCos +
+                    waterDir_wk_sc:ydayCos +
+                    
+                    target_sp_lag1:target_sp_lag2:target_sp_lag3:ydayCos +
+                    
+                    target_sp_lagWt1:ydayCos + 
+                    target_sp_lagWt2:ydayCos + 
+                    target_sp_lagWt3:ydayCos +
+                    
+                    # target_sp_lag1:date_lag1 + 
+                    # target_sp_lag2:date_lag2 +
+                    # target_sp_lag3:date_lag3 +
+                    # target_sp_lag1:date_lag1:ydayCos + 
+                    # target_sp_lag2:date_lag2:ydayCos + 
+                    # target_sp_lag3:date_lag3:ydayCos +
+                    
+                    target_sp_lagWt1:temp_wk_sc +
+                    target_sp_lagWt1:short_wave_wk_sc +
+                    target_sp_lagWt1:wind_wk_sc +
+                  
+                  (1|site.id),
+                  data=train.df, cores=4,  family=cumulative(),
+                  prior=prior_i, file=glue("temp{sep}out_{week_i}_ord"),
+                  save_model=glue("temp{sep}mod_{week_i}_ord.stan"))
   
-  Sys.sleep(2)
   cat("  Fitted model \n")
-  out.pred <- posterior_linpred(out, transform=F, newdata=test.df, allow_new_levels=T)
-  # out_summary <- summary(out)
+  out.logitpred <- posterior_linpred(out[[i]], transform=F, newdata=test.df, allow_new_levels=T)
+  out.pred <- posterior_linpred(out[[i]], transform=T, newdata=test.df, allow_new_levels=T)
+  out_summary <- summary(out[[i]])
   # cutoffs <- c(-Inf, 
   #              out_summary$fixed[grep("Intercept", rownames(out_summary$fixed)),1],
   #              Inf)
   
   cat("  Made predictions \n")
-  Sys.sleep(2)
+  
   pred.df <- test.df %>%
     mutate(pred_mn=colMeans(out.pred), 
            pred_se=apply(out.pred, 2, function(x) sd(x)/sqrt(length(x))),
            pred_q10=apply(out.pred, 2, function(x) quantile(x, probs=0.1)),
            pred_q90=apply(out.pred, 2, function(x) quantile(x, probs=0.9))) %>%
+    mutate(lpred_mn=colMeans(out.logitpred), 
+           lpred_se=apply(out.logitpred, 2, function(x) sd(x)/sqrt(length(x))),
+           lpred_q10=apply(out.logitpred, 2, function(x) quantile(x, probs=0.1)),
+           lpred_q90=apply(out.logitpred, 2, function(x) quantile(x, probs=0.9))) %>%
     # bind_cols(imap_dfc(setNames(2:length(cutoffs), glue("pr{1:(length(cutoffs)-1)}")), 
     #                    ~apply(out.pred, 2, 
     #                           function(x) sum(x>cutoffs[.x-1] & x<cutoffs[.x])/nrow(out.pred)))) %>%
@@ -241,16 +224,141 @@ for(i in 2:length(dates)) {
   p <- ggplot(pred.df, aes(log(target_sp+1), pred_mn,
                            ymin=pred_q10, ymax=pred_q90)) + 
     geom_point(aes(colour=target_cat_f)) + geom_errorbar(aes(colour=target_cat_f), width=0.1) + 
-    stat_smooth(se=F, method="lm") +
+    stat_smooth(method="glm", se=F, method.args=list(family=binomial), size=0.5) +
     scale_colour_manual("Obs. cat.", values=c("1"="green3", "2"="gold1", "3"="orange", "4"="red")) +
-    labs(title=date_i, x="observed log(N+1)", y="Predicted mean + 80% CI")
-  ggsave(glue("temp{sep}plot_pred_{date_i}.png"), p, height=4, width=5, dpi=200)
+    ylim(0, 1) +
+    labs(title=glue("Week {week_i}: {date_range}"), 
+         x="observed log(N+1)", y="Predicted mean + 80% CI (prob)")
+  ggsave(glue("temp{sep}plot_lpred_{week_i}.png"), p, height=4, width=5, dpi=200)
+  
+  p <- ggplot(pred.df, aes(pred_mn, as.numeric(target_sp_binary),
+                      xmin=pred_q10, xmax=pred_q90)) + 
+    geom_point(aes(colour=target_cat_f)) + geom_linerange(aes(colour=target_cat_f)) + 
+    stat_smooth(method="glm", se=F, method.args=list(family=binomial), size=0.5) +
+    scale_colour_manual("Obs. cat.", values=c("1"="green3", "2"="gold1", "3"="orange", "4"="red")) +
+    ylim(0, 1) + xlim(0, 1) +
+    labs(title=glue("Week {week_i}: {date_range}"),
+         y="Observed binary category", x="Predicted mean + 80% CI (prob)")
+  ggsave(glue("temp{sep}plot_lpred2_{week_i}.png"), p, height=4, width=5, dpi=200)
+  
+  p <- ggplot(pred.df, aes(log(target_sp+1), lpred_mn,
+                           ymin=lpred_q10, ymax=lpred_q90)) + 
+    geom_point(aes(colour=target_cat_f)) + geom_errorbar(aes(colour=target_cat_f), width=0.1) + 
+    stat_smooth(se=F, method="lm", formula=y~x, size=0.5) +
+    scale_colour_manual("Obs. cat.", values=c("1"="green3", "2"="gold1", "3"="orange", "4"="red")) +
+    labs(title=glue("Week {week_i}: {date_range}"), 
+         x="observed log(N+1)", y="Predicted mean + 80% CI (logit)")
+  ggsave(glue("temp{sep}plot_pred_{week_i}.png"), p, height=4, width=5, dpi=200)
+  
+  p <- ggplot(pred.df, aes(lpred_mn, log(target_sp+1), 
+                           xmin=lpred_q10, xmax=lpred_q90)) + 
+    geom_point(aes(colour=target_cat_f)) + geom_linerange(aes(colour=target_cat_f)) + 
+    stat_smooth(se=F, method="lm", formula=y~x, size=0.5) +
+    scale_colour_manual("Obs. cat.", values=c("1"="green3", "2"="gold1", "3"="orange", "4"="red")) +
+    labs(title=glue("Week {week_i}: {date_range}"), 
+         y="observed log(N+1)", x="Predicted mean + 80% CI (logit)")
+  ggsave(glue("temp{sep}plot_pred2_{week_i}.png"), p, height=4, width=5, dpi=200)
   
   cat("  Saving output \n")
-  saveRDS(out, glue("temp{sep}out_{date_i}.rds"))
-  # saveRDS(out_summary$fixed, glue("temp{sep}fixed_eff_{date_i}.rds"))
-  saveRDS(pred.df, glue("temp{sep}pred_{date_i}.rds"))
+  saveRDS(out_summary$fixed, glue("temp{sep}fixed_eff_{week_i}.rds"))
+  saveRDS(pred.df, glue("temp{sep}pred_{week_i}_ord.rds"))
 }
 
 
+
+
+
+
+# post-hoc ----------------------------------------------------------------
+# 
+# coef.df <- dir("temp", "fixed") %>% 
+#   map_dfr(~readRDS(paste0("temp\\", .x)) %>% 
+#             rownames_to_column("param") %>%
+#             mutate(week=as.numeric(str_sub(.x, 11, -5))))
+# 
+# ggplot(coef.df, aes(week, y=Estimate, ymin=`l-95% CI`, ymax=`u-95% CI`)) + 
+#   geom_hline(yintercept=0) + 
+#   geom_ribbon(alpha=0.25) + 
+#   geom_line() + facet_wrap(~param)
+
+
+
+
+
+
+
+
+
+# gbm ---------------------------------------------------------------------
+
+# library(gbm)
+# week_i <- 158
+# train.df <- sampling.df %>%
+#   filter(wk < week_i)
+# test.df <- sampling.df %>%
+#   filter(wk == week_i) %>%
+#   filter(site.id %in% train.df$site.id)
+# 
+# train.gbm <- train.df %>% ungroup %>% 
+#   select(-obs_id, -nObs, -target_sp, -target_cat, -date_collected, -yday, -wk, -date)
+# mod.gbm <- gbm(target_sp_binary~., 
+#                "bernoulli", 
+#                data=train.gbm, 
+#                n.trees=1e3, 
+#                cv.folds=10,
+#                interaction.depth=5)
+# print(mod.gbm)
+# summary(mod.gbm) %>% filter(rel.inf > 0)
+# 
+# test.gbm <- test.df %>% ungroup %>%
+#   select(-obs_id, -nObs, -target_sp, -target_cat, -date_collected, -yday, -wk, -date)
+# test.x <- test.gbm %>% select(-target_sp_binary)
+# test.y <- test.gbm %>% select(target_sp_binary)
+# 
+# pred.y = predict.gbm(mod.gbm, test.x)
+# x.ax = 1:length(pred.y)
+# plot(x.ax, as.numeric(test.y$target_sp_binary), col="blue", pch=20, cex=.9, ylim=c(0,1))
+# points(x.ax, as.numeric(pred.y>0), col="red", pch=1, cex=1.25) 
+# 
+# 
+# 
+# train.gbm <- train.df %>% ungroup %>% mutate(target_sp=log(target_sp+1)) %>%
+#   select(-obs_id, -nObs, -target_sp_binary, -target_cat, -date_collected, -yday, -wk, -date)
+# mod.gbm <- gbm(target_sp~., 
+#                "tdist", 
+#                data=train.gbm, 
+#                n.trees=1e3, 
+#                cv.folds=10,
+#                interaction.depth=5)
+# print(mod.gbm)
+# summary(mod.gbm) %>% filter(rel.inf > 0)
+# 
+# test.gbm <- test.df %>% ungroup %>%
+#   select(-obs_id, -nObs, -target_sp_binary, -target_cat, -date_collected, -yday, -wk, -date)
+# test.x <- test.gbm %>% select(-target_sp)
+# test.y <- test.gbm %>% select(target_sp) %>% mutate(target_sp=log(target_sp+1))
+# 
+# pred.y = predict.gbm(mod.gbm, test.x)
+# x.ax = 1:length(pred.y)
+# plot(x.ax, test.y$target_sp, col="blue", pch=20, cex=.9)
+# points(x.ax, pred.y, col="red", pch=1, cex=1.25) 
+# plot(pred.y, test.y$target_sp); abline(a=0, b=1)
+# plot(test.y$target_sp, pred.y-test.y$target_sp); abline(h=0)
+
+
+
+
+
+# nnet --------------------------------------------------------------------
+
+# library(nnet)
+# 
+# train.nnet <- train.df %>% ungroup %>% mutate(target_cat=factor(target_cat)) %>%
+#   select(-obs_id, -nObs, -target_sp, -target_cat, -date_collected, -yday, -wk, -date)
+# test.nnet <- test.df %>% ungroup %>% mutate(target_cat=factor(target_cat)) %>%
+#   select(-obs_id, -nObs, -target_sp, -target_cat, -date_collected, -yday, -wk, -date)
+# 
+# mod.nnet <- nnet(target_sp_binary~., train.nnet, size=3, entropy=T, weights=train.nnet$target_sp_binary+1)
+# pred.nnet <- predict(mod.nnet, newdata=test.nnet)
+# plot(test.nnet$target_cat, pred.nnet[,1])
 
