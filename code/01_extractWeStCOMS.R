@@ -12,9 +12,9 @@
 pkgs <- c("tidyverse", "glue", "lubridate", "sf", "jsonlite", "WeStCOMS")
 invisible(lapply(pkgs, library, character.only=T))
 
-cores <- 10
+cores <- 60
 nLags <- 7
-buffer_radius <- 1e3
+buffer_radius <- 5e3
 
 if(.Platform$OS.type=="unix") {
   sep <- "/"
@@ -96,6 +96,9 @@ sampling.regional <- sampling.local %>%
   bind_rows %>%
   mutate(depth=pmin(10, depth.elem))
 
+write_csv(sampling.local, glue("data{sep}sampling_local.csv"))
+write_csv(sampling.regional, glue("data{sep}sampling_regional.csv"))
+
 
 
 
@@ -116,20 +119,16 @@ var.df <- tibble(var=c("temp", "salinity", "short_wave",
 
 sampling.local_i <- sampling.local %>% 
   select(obs.id, site.id, date, depth, grid, site.elem, starts_with("trinode"))
-out.local <- map(0:nLags,
-                 ~extractHydroVars(sampling.local_i %>%
-                                     mutate(date=str_remove_all(as.character(date-.x),"-")),
-                                   westcoms.dir, var.df$var, var.df$dayFn, var.df$depthFn,
-                                   cores=cores, progress=T)) 
-for(i in 0:nLags) {
-  out.local[[i+1]] <- out.local[[i+1]] %>%
-    rename_with(~paste0(.x, "_L", i), .cols=any_of(var.df$var))
-}
-out.local <- full_join(sampling.local, 
-                       reduce(out.local, full_join, by="obs.id"),
-                       by="obs.id")
 
-write_csv(out.local, glue("data{sep}hydro_local.csv"))
+for(i in 0:nLags) {
+  cat("Starting lag", i, "local\n")
+  sampling.local_i %>%
+    mutate(date=str_remove_all(as.character(date-i), "-")) %>%
+    extractHydroVars(., westcoms.dir, var.df$var, var.df$dayFn, var.df$depthFn,
+                     cores=cores, progress=T) %>%
+    rename_with(~paste0(.x, "_L", i), .cols=any_of(var.df$var)) %>%
+    write_csv(glue("data{sep}hydro_L{i}.csv"))
+}
 
 
 
@@ -137,18 +136,14 @@ write_csv(out.local, glue("data{sep}hydro_local.csv"))
 
 sampling.regional_i <- sampling.regional %>% 
   select(obs.id, site.id, date, depth, grid, site.elem, starts_with("trinode"))
-out.regional <- map(0:nLags,
-                 ~extractHydroVars(sampling.regional_i %>%
-                                     mutate(date=str_remove_all(as.character(date-.x),"-")),
-                                   westcoms.dir, var.df$var, var.df$dayFn, var.df$depthFn,
-                                   cores=cores, progress=T)) 
-for(i in 0:nLags) {
-  out.regional[[i+1]] <- out.regional[[i+1]] %>%
-    rename_with(~paste0(.x, "_R", i), .cols=any_of(var.df$var))
-}
-out.all <- full_join(out.local, 
-                     reduce(out.regional, full_join, by="obs.id"),
-                     by="obs.id")
 
-write_csv(out.all, glue("data{sep}hydro_all.csv"))
+for(i in 0:nLags) {
+  cat("Starting lag", i, "local\n")
+  sampling.regional_i %>%
+    mutate(date=str_remove_all(as.character(date-i), "-")) %>%
+    extractHydroVars(., westcoms.dir, var.df$var, var.df$dayFn, var.df$depthFn,
+                     regional=T, cores=cores, progress=T) %>%
+    rename_with(~paste0(.x, "_R", i), .cols=any_of(var.df$var)) %>%
+    write_csv(glue("data{sep}hydro_R{i}.csv"))
+}
 
