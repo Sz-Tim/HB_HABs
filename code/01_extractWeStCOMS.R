@@ -45,7 +45,7 @@ fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>%
   mutate(datetime_collected=as_datetime(date_collected),
          date=date(datetime_collected),
          hour=pmin(20, pmax(5, hour(datetime_collected))),
-         grid=if_else(date_collected < "2019-05-01", 1, 2),
+         grid=if_else(date_collected < "2019-07-02", 1, 2),
          site.id=as.numeric(factor(paste(sin, area, site)))) %>%
   filter(datetime_collected >= "2013-07-20") %>% 
   rename(obs.id=oid) %>%
