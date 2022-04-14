@@ -156,7 +156,7 @@ for(sp in 1:length(species)) {
   
   train.df <- sampling.df %>% filter(year < 2019)
   
-  stanvars <- stanvar(scode=readr::read_file("models\\hurdle_frechet_fn.stan"),
+  stanvars <- stanvar(scode=readr::read_file(glue("models{sep}hurdle_frechet_fn.stan")),
                       block="functions")
   
   out.huf[[sp]] <- brm(form_hu_frechet, data=train.df, 
