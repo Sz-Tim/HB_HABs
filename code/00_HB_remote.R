@@ -162,21 +162,21 @@ for(sp in 1:length(species)) {
   out.huf[[sp]] <- brm(form_hu_frechet, data=train.df, 
                        family=hurdle_frechet(), stanvars=stanvars,
                        chains=4, cores=4, init="0",
-                       iter=100,
-                       # iter=3000, warmup=2000, refresh=500, 
+                       iter=3000, warmup=2000, refresh=500,
                        control=list(adapt_delta=0.95, max_treedepth=20),
                        prior=c(prior(normal(2, 1), "Intercept", dpar="hu"),
                                prior(horseshoe(1), "b")),
-                       save_model=glue("temp{sep}00_mod_hu_frechet_{target}.stan"))
+                       save_model=glue("temp{sep}hu_frechet_{target}.stan"),
+                       file=glue("temp{sep}hu_frechet_{target}"))
   saveRDS(out.huf[[sp]], glue("temp{sep}out_hu_frechet_{target}.rds"))
   
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                        family=cumulative("probit"), 
                        chains=4, cores=4, 
-                       iter=100,
-                       # iter=3000, warmup=2000, refresh=500, 
+                       iter=3000, warmup=2000, refresh=500,
                        prior=prior(normal(0,2), class="b"),
-                       save_model=glue("temp{sep}00_mod_ordinal_{target}.stan"))
+                       save_model=glue("temp{sep}ordinal_{target}.stan"),
+                       file=glue("temp{sep}ordinal_{target}"))
   
   saveRDS(out.ord[[sp]], glue("temp{sep}out_ordinal_{target}.rds"))
   
