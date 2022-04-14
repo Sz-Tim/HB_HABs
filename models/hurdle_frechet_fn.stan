@@ -1,3 +1,8 @@
+  // HABReports Bayesian modelling
+  // Hurdle frechet likelihood functions
+  // Tim Szewczyk
+  
+  
   /* hurdle frechet log-PDF of a single response 
    * Args: 
    *   y: the response value 
