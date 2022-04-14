@@ -168,17 +168,14 @@ for(sp in 1:length(species)) {
                                prior(horseshoe(1), "b")),
                        save_model=glue("temp{sep}hu_frechet_{target}.stan"),
                        file=glue("temp{sep}hu_frechet_{target}"))
-  saveRDS(out.huf[[sp]], glue("temp{sep}out_hu_frechet_{target}.rds"))
   
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                        family=cumulative("probit"), 
                        chains=4, cores=4, 
                        iter=3000, warmup=2000, refresh=500,
-                       prior=prior(normal(0,2), class="b"),
+                       prior=prior(horseshoe(1), class="b"),
                        save_model=glue("temp{sep}ordinal_{target}.stan"),
                        file=glue("temp{sep}ordinal_{target}"))
-  
-  saveRDS(out.ord[[sp]], glue("temp{sep}out_ordinal_{target}.rds"))
   
   cat("Finished", target, "\n")
 }
