@@ -1,8 +1,8 @@
 id,hab_parameter,min_ge,max_lt,label,alert,symbol_size,symbol_colour,tl
 2,alexandrium_sp,0,1.00E-05,0,NA,12,65365,0_green
-2,alexandrium_sp,1,19,Jan-19,alert,12,65535,1_yellow
-2,alexandrium_sp,20,39,20-39,alert,13,33023,2_orange
-2,alexandrium_sp,40,1999,"40-1,999",alert,14,255,3_red
+2,alexandrium_sp,1,20,Jan-19,alert,12,65535,1_yellow
+2,alexandrium_sp,21,40,20-39,alert,13,33023,2_orange
+2,alexandrium_sp,41,1999,"40-1,999",alert,14,255,3_red
 2,alexandrium_sp,2000,4999,"2,000-4,999",alert,17,255,3_red
 2,alexandrium_sp,5000,19999,"5,000-19,999",alert,20,255,3_red
 2,alexandrium_sp,20000,100000,">=20,000",NA,22,255,3_red
