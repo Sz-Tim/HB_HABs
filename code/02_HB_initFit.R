@@ -95,13 +95,13 @@ predictors_main <- "
   waterDir_R_wk:ydayCos +
   fetch +
                  
-  N.catF_1:ydayCos +
-  N.catF_2:ydayCos +
+  N.PA_1:ydayCos +
+  N.PA_2:ydayCos +
 
   N.lnWt_1:ydayCos + 
   N.lnWt_2:ydayCos + 
 
-  N.catF_1:N.catF_2 +
+  N.PA_1:N.PA_2 +
 
   wind_L_wk:fetch +
   water_L_wk:fetch +
@@ -113,9 +113,9 @@ predictors_main <- "
 "
 predictors_hu <- "
   ydayCos + ydaySin +
-  N.catF_1:ydayCos +
-  N.catF_1:ydaySin +
-  N.catF_1:N.catF_2 +
+  N.PA_1:ydayCos +
+  N.PA_1:ydaySin +
+  N.PA_1:N.PA_2 +
   fetch +
   wind_L_wk:fetch +
   water_L_wk:fetch

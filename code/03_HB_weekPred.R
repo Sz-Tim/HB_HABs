@@ -95,13 +95,13 @@ predictors_main <- "
   waterDir_R_wk:ydayCos +
   fetch +
                  
-  N.catF_1:ydayCos +
-  N.catF_2:ydayCos +
+  N.PA_1:ydayCos +
+  N.PA_2:ydayCos +
 
   N.lnWt_1:ydayCos + 
   N.lnWt_2:ydayCos + 
 
-  N.catF_1:N.catF_2 +
+  N.PA_1:N.PA_2 +
 
   wind_L_wk:fetch +
   water_L_wk:fetch +
@@ -113,9 +113,9 @@ predictors_main <- "
 "
 predictors_hu <- "
   ydayCos + ydaySin +
-  N.catF_1:ydayCos +
-  N.catF_1:ydaySin +
-  N.catF_1:N.catF_2 +
+  N.PA_1:ydayCos +
+  N.PA_1:ydaySin +
+  N.PA_1:N.PA_2 +
   fetch +
   wind_L_wk:fetch +
   water_L_wk:fetch
@@ -141,10 +141,11 @@ for(sp in 1:length(species)) {
   target <- species[sp]
   target.tf <- thresh.df %>% filter(hab_parameter==target)
   out.ord <- vector("list", length(weeks))
-  for(i in 1:length(weeks)) {
-    week_i <- weeks[i]
+  for(i in 1:(length(weeks)-1)) {
+    week_fit <- weeks[i]
+    week_pred <- weeks[i+1]
     
-    train.df <- sampling.df %>% 
+    target.df <- sampling.df %>% 
       rename(N=!!target) %>%
       select(obs.id, site.id, date, wk, hour, grid, lon, lat, fetch, bearing, N) %>%
       mutate(yday=yday(date),
@@ -178,14 +179,15 @@ for(sp in 1:length(species)) {
     
     
     if(i == 1) {
-      train.df <- train.df %>% filter(wk < week_i)
+      train.df <- target.df %>% filter(wk <= week_fit)
       out_ord_im1 <- readRDS(glue("out{sep}initFit{sep}ordinal_{target}.rds")) 
       out_huf_im1 <- readRDS(glue("out{sep}initFit{sep}huf_{target}.rds")) 
     } else {
-      train.df <- train.df %>% filter(wk == week_i)
+      train.df <- target.df %>% filter(wk == week_fit)
       out_ord_im1 <- readRDS(glue("out{sep}weekFit{sep}ordinal_{target}_{weeks[i-1]}.rds")) 
       out_huf_im1 <- readRDS(glue("out{sep}weekFit{sep}huf_{target}_{weeks[i-1]}.rds"))  
     }
+    test.df <- target.df %>% filter(wk == week_pred)
     # ordinal priors
     b_ord_im1 <- as_draws_df(out_ord_im1, variable="b_", regex=T) %>%
       pivot_longer(cols=starts_with("b_"), names_to="param", values_to="val") %>%
@@ -235,7 +237,7 @@ for(sp in 1:length(species)) {
     
     
     date_range <- paste(as.character(range(train.df$date)), collapse=" to ")
-    cat("Starting", i, "= week", as.character(week_i), "=", date_range, "\n")
+    cat("Starting", i, "= week", as.character(week_fit), "=", date_range, "\n")
     cat("  train:", nrow(train.df), "rows with", n_distinct(train.df$site.id), "sites",
         "    ", table(train.df$N.catF), "\n")
     if(i == 1) {
@@ -245,18 +247,41 @@ for(sp in 1:length(species)) {
                       prior=prior_ord, chains=4, cores=4, 
                       iter=3000, warmup=2000, refresh=100, inits="0",
                       control=list(adapt_delta=0.95, max_treedepth=20),
-                      file=glue("out{sep}weekFit{sep}ordinal_{target}_{week_i}"))
+                      file=glue("out{sep}weekFit{sep}ordinal_{target}_{week_fit}"))
       out.huf[[i]] <- brm(form_huf, train.df, hurdle_frechet,
                           prior=prior_huf, chains=4, cores=4, 
                           iter=3000, warmup=2000, refresh=100, inits="0",
                           control=list(adapt_delta=0.95, max_treedepth=20),
-                          file=glue("out{sep}weekFit{sep}huf_{target}_{week_i}"))
+                          file=glue("out{sep}weekFit{sep}huf_{target}_{week_fit}"))
     } else {
-      out.ord[[i]] <- update(out_ord_im1, newdata=train.df, cores=4,
-                         prior=prior_ord, file=glue("out{sep}weekFit{sep}ordinal_{target}_{week_i}")) 
+      out.ord[[i]] <- update(out_ord_im1, newdata=train.df, cores=4, 
+                         prior=prior_ord, file=glue("out{sep}weekFit{sep}ordinal_{target}_{week_fit}")) 
       out.huf[[i]] <- update(out_huf_im1, newdata=train.df, cores=4,
-                             prior=prior_huf, file=glue("out{sep}weekFit{sep}huf_{target}_{week_i}")) 
+                             prior=prior_huf, file=glue("out{sep}weekFit{sep}huf_{target}_{week_fit}")) 
     }
+    
+    pred.ord <- posterior_epred(out.ord[[i]], newdata=test.df, allow_new_levels=T)
+    pred.huf <- posterior_epred(out.huf[[i]], newdata=test.df, allow_new_levels=T)
+    
+    test.df %>% 
+      select(obs.id) %>%
+      mutate(#huf_mn=colMeans(fit.huf),
+        # huf_0=apply(exp(fit.huf)-1, 2,
+        #                   function(x) mean(x>=target.tf$min_ge[1] &
+        #                                      x<=target.tf$min_ge[2])),
+        # huf_1=apply(exp(fit.huf)-1, 2,
+        #                   function(x) mean(x>=target.tf$min_ge[2] &
+        #                                      x<=target.tf$min_ge[3])),
+        # huf_2=apply(exp(fit.huf)-1, 2,
+        #                    function(x) mean(x>=target.tf$min_ge[3] &
+        #                                       x<=target.tf$min_ge[4])),
+        # huf_3=apply(exp(fit.huf)-1, 2,
+        #                    function(x) mean(x>=target.tf$min_ge[4])),
+             ord_0=colMeans(pred.ord[,,1]),
+             ord_1=colMeans(pred.ord[,,2]),
+             ord_2=colMeans(pred.ord[,,3]),
+             ord_3=colMeans(pred.ord[,,4])) %>%
+      write_csv(glue("out{sep}weekFit{sep}pred_{week_pred}.csv"))
     
     cat("  Fitted model \n")
   }
