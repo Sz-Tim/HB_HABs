@@ -36,7 +36,17 @@ if(.Platform$OS.type=="unix") {
 
 # covariates --------------------------------------------------------------
 
-thresh.df <- read_csv(glue("data{sep}hab_tf_thresholds.csv"))
+species <- c("alexandrium_sp", "dinophysis_sp", "karenia_mikimotoi",
+             "prorocentrum_lima", "pseudo_nitzschia_sp")
+
+sampling.df <- read_csv(glue("data{sep}sampling_local.csv"))
+
+thresh.df <- read_csv(glue("data{sep}hab_tf_thresholds.csv")) %>%
+  filter(!is.na(tl)) %>%
+  group_by(hab_parameter, tl) %>%
+  slice_head(n=1) %>%
+  ungroup
+
 hydro.df <- dir("data", "hydro_", full.names=T) %>% 
   map(read_csv) %>%
   reduce(., full_join) %>% 
@@ -80,15 +90,24 @@ predictors_main <- "
   water_L_wk:ydayCos +
   water_R_wk:ydayCos +
   wind_L_wk:ydayCos +
+  windDir_L_wk:ydayCos +
+  waterDir_L_wk:ydayCos +
+  waterDir_R_wk:ydayCos +
   fetch +
                  
   N.catF_1:ydayCos +
   N.catF_2:ydayCos +
 
+  N.lnWt_1:ydayCos + 
+  N.lnWt_2:ydayCos + 
+
   N.catF_1:N.catF_2 +
 
   wind_L_wk:fetch +
   water_L_wk:fetch +
+  windDir_L_wk:fetch +
+  waterDir_L_wk:fetch +
+  waterDir_R_wk:fetch +
                  
   (1|site.id)
 "
@@ -104,37 +123,37 @@ predictors_hu <- "
 
 form_hu_frechet <- bf(glue("N.ln ~ {predictors_main}"),
                       glue("hu ~ {predictors_hu}"))
-form_ordinal <- bf(glue("N.catF ~ {predictors_main}"))
+form_ordinal <- bf(glue("N.catNum | thres(3) ~ {predictors_main}"))
 
 
 
 
 
-# sampling_df -------------------------------------------------------------
 
-species <- c("alexandrium_sp", "dinophysis_sp", "karenia_mikimotoi",
-             "prorocentrum_lima", "pseudo_nitzschia_sp")
+
+# initial fit -------------------------------------------------------------
+
 out.huf <- out.ord <- vector("list", length(species))
 
 for(sp in 1:length(species)) {
   target <- species[sp]
   target.tf <- thresh.df %>% filter(hab_parameter==target)
   
-  sampling.df <- read_csv(glue("data{sep}sampling_local.csv")) %>% 
+  train.df <- sampling.df %>% 
     rename(N=!!target) %>%
-    select(obs.id, site.id, date, hour, grid, lon, lat, fetch, N) %>%
+    select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
     mutate(yday=yday(date),
            ydayCos=cos(2*pi*yday/365),
            ydaySin=sin(2*pi*yday/365),
            year=year(date),
-           wk=floor(as.numeric(date - min(date))/7),
+           bearing=bearing*pi/180,
            N=round(N),
            N.ln=log(N+1),
            N.PA=as.numeric(N>0)) %>%
     rowwise() %>%
-    mutate(N.cat=target.tf$tl[which.max(N >= target.tf$min_ge & N <= target.tf$max_lt)]) %>%
+    mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
     mutate(N.catF=factor(N.cat, levels=unique(target.tf$tl), ordered=T),
-           N.catp1=as.numeric(N.catF)+1) %>%
+           N.catNum=as.numeric(N.catF)) %>%
     arrange(site.id, date) %>%
     group_by(site.id) %>%
     multijetlag(N.ln, N.PA, N.cat, N.catF, date, n=2) %>%
@@ -144,41 +163,282 @@ for(sp in 1:length(species)) {
            N.lnWt_1=N.ln_1/date_1,
            N.lnWt_2=N.ln_2/date_2) %>%
     full_join(hydro.df) %>%
-    mutate(across(one_of(covars), CenterScale)) %>%
+    mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>%
+    mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
     arrange(site.id, date) %>%
     filter(complete.cases(.)) %>%
-    select(site.id, lon, lat, date, year, obs.id, wk, fetch,
+    select(site.id, lon, lat, date, year, obs.id, fetch, bearing,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
-           one_of(covars))
-  
-  
-  
-  
-  train.df <- sampling.df %>% filter(year < 2019)
+           one_of(covars)) %>%
+    filter(year < 2017)
   
   stanvars <- stanvar(scode=readr::read_file(glue("models{sep}hurdle_frechet_fn.stan")),
                       block="functions")
   
-  out.huf[[sp]] <- brm(form_hu_frechet, data=train.df, 
-                       family=hurdle_frechet(), stanvars=stanvars,
-                       chains=4, cores=4, init="0",
-                       iter=3000, warmup=2000, refresh=500,
-                       control=list(adapt_delta=0.95, max_treedepth=20),
-                       prior=c(prior(normal(2, 1), "Intercept", dpar="hu"),
-                               prior(horseshoe(1), "b")),
-                       save_model=glue("temp{sep}hu_frechet_{target}.stan"),
-                       file=glue("temp{sep}hu_frechet_{target}"))
+  # out.huf[[sp]] <- brm(form_hu_frechet, data=train.df,
+  #                      family=hurdle_frechet(), stanvars=stanvars,
+  #                      chains=4, cores=4, init="0",
+  #                      iter=3000, warmup=2000, refresh=500,
+  #                      control=list(adapt_delta=0.95, max_treedepth=20),
+  #                      prior=c(prior(normal(2, 1), "Intercept", dpar="hu"),
+  #                              prior(horseshoe(3, par_ratio=0.2), "b")),
+  #                      save_model=glue("temp{sep}hu_frechet_{target}.stan"),
+  #                      file=glue("temp{sep}hu_frechet_{target}"))
   
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                        family=cumulative("probit"), 
                        chains=4, cores=4, 
-                       iter=3000, warmup=2000, refresh=500,
-                       prior=prior(horseshoe(1), class="b"),
+                       iter=3000, warmup=2000, refresh=100, inits="0",
+                       control=list(adapt_delta=0.95, max_treedepth=20),
+                       prior=prior(horseshoe(3, par_ratio=0.2), class="b"),
                        save_model=glue("temp{sep}ordinal_{target}.stan"),
                        file=glue("temp{sep}ordinal_{target}"))
   
   cat("Finished", target, "\n")
 }
+
+
+
+
+
+
+
+
+
+
+# weekly updates ----------------------------------------------------------
+
+sampling.df <- sampling.df %>% 
+  mutate(wk=floor(as.numeric(date - min(date))/7),
+         month=month(date))
+weeks <- sort(unique(filter(sampling.df, year(date)>2017 & between(month, 3, 11))$wk))
+
+for(sp in 1:length(species)) {
+  target <- species[sp]
+  target.tf <- thresh.df %>% filter(hab_parameter==target)
+  out <- vector("list", length(weeks))
+  for(i in 1:length(weeks)) {
+    week_i <- weeks[i]
+    
+    train.df <- sampling.df %>% 
+      rename(N=!!target) %>%
+      select(obs.id, site.id, date, wk, hour, grid, lon, lat, fetch, bearing, N) %>%
+      mutate(yday=yday(date),
+             ydayCos=cos(2*pi*yday/365),
+             ydaySin=sin(2*pi*yday/365),
+             year=year(date),
+             bearing=bearing*pi/180,
+             N=round(N),
+             N.ln=log(N+1),
+             N.PA=as.numeric(N>0)) %>%
+      rowwise() %>%
+      mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
+      mutate(N.catF=factor(N.cat, levels=unique(target.tf$tl), ordered=T),
+             N.catNum=as.numeric(N.catF)) %>%
+      arrange(site.id, date) %>%
+      group_by(site.id) %>%
+      multijetlag(N.ln, N.PA, N.cat, N.catF, date, n=2) %>%
+      ungroup %>%
+      mutate(across(starts_with("date_"), ~as.numeric(date-.x)),
+             # I don't love this since small if N.ln_x is small OR date_x is large
+             N.lnWt_1=N.ln_1/date_1,
+             N.lnWt_2=N.ln_2/date_2) %>%
+      left_join(hydro.df) %>%
+      mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>%
+      mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
+      arrange(site.id, date) %>%
+      filter(complete.cases(.)) %>%
+      select(site.id, lon, lat, date, year, wk, obs.id, fetch, bearing,
+             starts_with("N"), starts_with("date_"), starts_with("yday"),
+             one_of(covars)) 
+    
+    
+    if(i == 1) {
+      train.df <- train.df %>% filter(wk < week_i)
+      out_im1 <- readRDS(glue("temp{sep}ordinal_{target}.rds")) 
+    } else {
+      train.df <- train.df %>% filter(wk == week_i)
+      out_im1 <- readRDS(glue("temp{sep}ordinal_{target}_{weeks[i-1]}_ord.rds"))  
+    }
+    b_im1 <- as_draws_df(out_im1, variable="b_", regex=T) %>%
+      pivot_longer(cols=starts_with("b_"), names_to="param", values_to="val") %>%
+      group_by(param) %>%
+      summarise(mn=mean(val), sd=sd(val)) %>%
+      mutate(coef=str_remove(param, "b_"))
+    eff_im1 <- b_im1 %>% filter(!grepl("Intercept", param))
+    int_im1 <- b_im1 %>% filter(grepl("Intercept", param)) %>%
+      mutate(coef=str_remove(str_remove(str_remove(coef, "Intercept"), "\\["), "]"))
+    sd_im1 <- summary(out_im1)$random$site.id
+    prior.ls <- vector("list", nrow(b_im1)+1)
+    for(j in 1:nrow(int_im1)) {
+      prior.ls[[j]] <- prior_string(glue("normal({int_im1$mn[j]},{int_im1$sd[j]})"),
+                                    class="Intercept", coef=int_im1$coef[j])
+    }
+    for(j in 1:nrow(eff_im1)) {
+      prior.ls[[j+nrow(int_im1)]] <- prior_string(glue("normal({eff_im1$mn[j]},{eff_im1$sd[j]})"),
+                                                  class="b", coef=eff_im1$coef[j])
+    }
+    prior.ls[[nrow(b_im1)+1]] <- prior_string(glue("normal({sd_im1$Estimate},{sqrt(sd_im1$Est.Error)})"),
+                                              class="sd")
+    prior_i <- do.call(rbind, prior.ls)
+    
+    
+    
+    date_range <- paste(as.character(range(train.df$date)), collapse=" to ")
+    cat("Starting", i, "= week", as.character(week_i), "=", date_range, "\n")
+    cat("  train:", nrow(train.df), "rows with", n_distinct(train.df$site.id), "sites",
+        "    ", table(train.df$N.catF), "\n")
+    if(i == 1) {
+      out[[i]] <- brm(form_ordinal, train.df, cumulative("probit"),
+                      prior=prior_i, chains=4, cores=4, 
+                      iter=3000, warmup=2000, refresh=100, inits="0",
+                      control=list(adapt_delta=0.95, max_treedepth=20),
+                      file=glue("temp{sep}ordinal_{target}_{week_i}_ord"))
+    } else {
+      out[[i]] <- update(out_im1, newdata=train.df, cores=4,
+                         prior=prior_i, file=glue("temp{sep}out_{week_i}_ord")) 
+    }
+    
+    cat("  Fitted model \n")
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# comparisons -------------------------------------------------------------
+
+species <- c("alexandrium_sp", "dinophysis_sp", "karenia_mikimotoi",
+             "prorocentrum_lima", "pseudo_nitzschia_sp")
+out.huf <- out.ord <- vector("list", length(species))
+
+for(sp in 1:length(species)) {
+  target <- species[sp]
+  target.tf <- thresh.df %>% filter(hab_parameter==target)
+
+  sampling.df <- read_csv(glue("data{sep}sampling_local.csv")) %>%
+    rename(N=!!target) %>%
+    select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
+    mutate(yday=yday(date),
+           ydayCos=cos(2*pi*yday/365),
+           ydaySin=sin(2*pi*yday/365),
+           year=year(date),
+           wk=floor(as.numeric(date - min(date))/7),
+           bearing=bearing*pi/180,
+           N=round(N),
+           N.ln=log(N+1),
+           N.PA=as.numeric(N>0)) %>%
+    rowwise() %>%
+    mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
+    mutate(N.catF=factor(N.cat, levels=unique(target.tf$tl), ordered=T),
+           N.catNum=as.numeric(N.catF)) %>%
+    arrange(site.id, date) %>%
+    group_by(site.id) %>%
+    multijetlag(N.ln, N.PA, N.cat, N.catF, date, n=2) %>%
+    ungroup %>%
+    mutate(across(starts_with("date_"), ~as.numeric(date-.x)),
+           # I don't love this since small if N.ln_x is small OR date_x is large
+           N.lnWt_1=N.ln_1/date_1,
+           N.lnWt_2=N.ln_2/date_2) %>%
+    full_join(hydro.df) %>%
+    mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>%
+    mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
+    arrange(site.id, date) %>%
+    filter(complete.cases(.)) %>%
+    select(site.id, lon, lat, date, year, obs.id, wk, fetch, bearing,
+           starts_with("N"), starts_with("date_"), starts_with("yday"),
+           one_of(covars))
+
+
+
+
+  train.df <- sampling.df %>% filter(year < 2019)
+  test.df <- sampling.df %>% filter(year==2019)
+
+
+  out.huf[[sp]] <- readRDS(glue("temp{sep}hu_frechet_{target}.rds"))
+  out.ord[[sp]] <- readRDS(glue("temp{sep}ordinal_{target}.rds"))
+
+  expose_functions(out.huf[[sp]])
+
+  fit.huf <- posterior_epred(out.huf[[sp]])
+  fit.ord <- posterior_epred(out.ord[[sp]])
+  pred.huf <- posterior_epred(out.huf[[sp]], newdata=test.df, allow_new_levels=T)
+  pred.ord <- posterior_epred(out.ord[[sp]], newdata=test.df, allow_new_levels=T)
+
+  fit.df <- train.df %>%
+    mutate(#huf_mn=colMeans(fit.huf),
+           # huf_0_green=apply(exp(fit.huf)-1, 2,
+           #                   function(x) mean(x>=target.tf$min_ge[1] &
+           #                                      x<=target.tf$min_ge[2])),
+           # huf_1_yellow=apply(exp(fit.huf)-1, 2,
+           #                   function(x) mean(x>=target.tf$min_ge[2] &
+           #                                      x<=target.tf$min_ge[3])),
+           # huf_2_orange=apply(exp(fit.huf)-1, 2,
+           #                    function(x) mean(x>=target.tf$min_ge[3] &
+           #                                       x<=target.tf$min_ge[4])),
+           # huf_3_red=apply(exp(fit.huf)-1, 2,
+           #                    function(x) mean(x>=target.tf$min_ge[4])),
+           ord_0_green=colMeans(fit.ord[,,1]),
+           ord_1_yellow=colMeans(fit.ord[,,2]),
+           ord_2_orange=colMeans(fit.ord[,,3]),
+           ord_3_red=colMeans(fit.ord[,,4]))
+  fit.df %>%
+    pivot_longer(starts_with("ord_"), names_to="cat.pred", values_to="prob") %>%
+    ggplot(aes(cat.pred, y=prob, fill=N.catF)) + geom_boxplot() +
+    facet_grid(~N.catF, scales="free_x") +
+    scale_fill_manual("Observed", values=c("green3", "gold1", "orange", "red"))
+  fit.df %>%
+    pivot_longer(starts_with("ord_"), names_to="cat.pred", values_to="prob") %>%
+    ggplot(aes(prob, N.catF)) + facet_wrap(~cat.pred) + geom_boxplot()
+  fit.df %>%
+    pivot_longer(starts_with("ord_"), names_to="cat.pred", values_to="prob") %>%
+    ggplot(aes(N.ln, prob, colour=cat.pred)) + geom_point() +
+    stat_smooth(se=F, method="loess") +
+    scale_colour_manual("Predicted", values=c("green3", "gold1", "orange", "red"))
+  pred.df <- test.df %>%
+    mutate(#huf_mn=colMeans(fit.huf),
+      # huf_0_green=apply(exp(fit.huf)-1, 2,
+      #                   function(x) mean(x>=target.tf$min_ge[1] &
+      #                                      x<=target.tf$min_ge[2])),
+      # huf_1_yellow=apply(exp(fit.huf)-1, 2,
+      #                   function(x) mean(x>=target.tf$min_ge[2] &
+      #                                      x<=target.tf$min_ge[3])),
+      # huf_2_orange=apply(exp(fit.huf)-1, 2,
+      #                    function(x) mean(x>=target.tf$min_ge[3] &
+      #                                       x<=target.tf$min_ge[4])),
+      # huf_3_red=apply(exp(fit.huf)-1, 2,
+      #                    function(x) mean(x>=target.tf$min_ge[4])),
+      ord_0_green=colMeans(pred.ord[,,1]),
+      ord_1_yellow=colMeans(pred.ord[,,2]),
+      ord_2_orange=colMeans(pred.ord[,,3]),
+      ord_3_red=colMeans(pred.ord[,,4]))
+
+
+  cat("Finished", target, "\n")
+}
+
+
+
+
 
 
 # 
