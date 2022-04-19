@@ -121,7 +121,7 @@ predictors_hu <- "
   water_L_wk:fetch
 "
 
-form_hu_frechet <- bf(glue("N.ln ~ {predictors_main}"),
+form_huf <- bf(glue("N.ln ~ {predictors_main}"),
                       glue("hu ~ {predictors_hu}"))
 form_ordinal <- bf(glue("N.catNum | thres(3) ~ {predictors_main}"))
 
@@ -175,15 +175,15 @@ for(sp in 1:length(species)) {
   stanvars <- stanvar(scode=readr::read_file(glue("models{sep}hurdle_frechet_fn.stan")),
                       block="functions")
   
-  out.huf[[sp]] <- brm(form_hu_frechet, data=train.df,
+  out.huf[[sp]] <- brm(form_huf, data=train.df,
                        family=hurdle_frechet(), stanvars=stanvars,
                        chains=4, cores=4, init="0",
                        iter=2000, warmup=1000, refresh=100,
                        control=list(adapt_delta=0.95, max_treedepth=20),
                        prior=c(prior(normal(2, 1), "Intercept", dpar="hu"),
                                prior(horseshoe(3, par_ratio=0.2), "b")),
-                       save_model=glue("out{sep}initFit{sep}hu_frechet_{target}.stan"),
-                       file=glue("out{sep}initFit{sep}hu_frechet_{target}"))
+                       save_model=glue("out{sep}initFit{sep}huf_{target}.stan"),
+                       file=glue("out{sep}initFit{sep}huf_{target}"))
   
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                        family=cumulative("probit"), 
