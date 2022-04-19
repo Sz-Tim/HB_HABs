@@ -170,7 +170,7 @@ for(sp in 1:length(species)) {
     select(site.id, lon, lat, date, year, obs.id, fetch, bearing,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
            one_of(covars)) %>%
-    filter(year < 2017)
+    filter(year <= 2017)
   
   stanvars <- stanvar(scode=readr::read_file(glue("models{sep}hurdle_frechet_fn.stan")),
                       block="functions")
