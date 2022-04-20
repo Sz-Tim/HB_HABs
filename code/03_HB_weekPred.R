@@ -140,7 +140,7 @@ weeks <- sort(unique(filter(sampling.df, year(date)>2017 & between(month, 3, 11)
 for(sp in 1:length(species)) {
   target <- species[sp]
   target.tf <- thresh.df %>% filter(hab_parameter==target)
-  out.ord <- vector("list", length(weeks))
+  out.ord <- out.huf <- vector("list", length(weeks))
   for(i in 1:(length(weeks)-1)) {
     week_fit <- weeks[i]
     week_pred <- weeks[i+1]
@@ -217,21 +217,36 @@ for(sp in 1:length(species)) {
       group_by(param) %>%
       summarise(mn=mean(val), sd=sd(val)) %>%
       mutate(coef=str_remove(param, "b_"))
-    eff_huf_im1 <- b_huf_im1 %>% filter(!grepl("Intercept", param))
-    int_huf_im1 <- b_huf_im1 %>% filter(grepl("Intercept", param)) %>%
-      mutate(coef=str_remove(str_remove(str_remove(coef, "Intercept"), "\\["), "]"))
+    fr_int_huf_im1 <- b_huf_im1 %>% filter(grepl("Intercept", param) & !grepl("_hu_", param)) %>%
+      mutate(coef="")
+    hu_int_huf_im1 <- b_huf_im1 %>% filter(grepl("Intercept", param) & grepl("_hu_", param)) %>%
+      mutate(coef="")
+    fr_eff_huf_im1 <- b_huf_im1 %>% filter(!grepl("Intercept", param) & !grepl("_hu_", param))
+    hu_eff_huf_im1 <- b_huf_im1 %>% filter(!grepl("Intercept", param) & grepl("_hu_", param)) %>%
+      mutate(coef=str_remove(coef, "hu_"))
     sd_im1 <- summary(out_huf_im1)$random$site.id
-    prior_huf.ls <- vector("list", nrow(b_huf_im1)+1)
-    for(j in 1:nrow(int_huf_im1)) {
-      prior_huf.ls[[j]] <- prior_string(glue("normal({int_huf_im1$mn[j]},{int_huf_im1$sd[j]})"),
-                                        class="Intercept", coef=int_huf_im1$coef[j])
+    nu_im1 <- summary(out_huf_im1)$spec_pars
+    prior_huf.ls <- vector("list", nrow(b_huf_im1))
+    prior_huf.ls[[1]] <- prior_string(glue("normal({fr_int_huf_im1$mn[1]},{fr_int_huf_im1$sd[1]})"),
+                                      class="Intercept", coef="")
+    prior_huf.ls[[2]] <- prior_string(glue("normal({hu_int_huf_im1$mn[1]},{hu_int_huf_im1$sd[1]})"),
+                                      class="Intercept", coef="", dpar="hu")
+    k <- 3
+    for(j in 1:nrow(fr_eff_huf_im1)) {
+      prior_huf.ls[[k]] <- prior_string(glue("normal({fr_eff_huf_im1$mn[j]},{fr_eff_huf_im1$sd[j]})"),
+                                          class="b", coef=fr_eff_huf_im1$coef[j])
+      k <- k+1
     }
-    for(j in 1:nrow(eff_huf_im1)) {
-      prior_huf.ls[[j+nrow(int_huf_im1)]] <- prior_string(glue("normal({eff_huf_im1$mn[j]},{eff_huf_im1$sd[j]})"),
-                                                          class="b", coef=eff_huf_im1$coef[j])
+    for(j in 1:nrow(hu_eff_huf_im1)) {
+      prior_huf.ls[[k]] <- prior_string(glue("normal({hu_eff_huf_im1$mn[j]},{hu_eff_huf_im1$sd[j]})"),
+                                        class="b", coef=hu_eff_huf_im1$coef[j], dpar="hu")
+      k <- k+1
     }
-    prior_huf.ls[[nrow(b_huf_im1)+1]] <- prior_string(glue("normal({sd_im1$Estimate},{sqrt(sd_im1$Est.Error)})"),
-                                                      class="sd")
+    prior_huf.ls[[k]] <- prior_string(glue("normal({sd_im1$Estimate},{sqrt(sd_im1$Est.Error)})"),
+                                      class="sd")
+    prior_huf.ls[[k+1]] <- prior_string(glue("normal({nu_im1$Estimate},{sqrt(nu_im1$Est.Error)})"),
+                                        class="nu")
+    
     prior_huf <- do.call(rbind, prior_huf.ls)
     
     
@@ -252,6 +267,7 @@ for(sp in 1:length(species)) {
                           prior=prior_huf, chains=4, cores=4, 
                           iter=3000, warmup=2000, refresh=100, inits="0",
                           control=list(adapt_delta=0.95, max_treedepth=20),
+                          stanvars=stanvars,
                           file=glue("out{sep}weekFit{sep}huf_{target}_{week_fit}"))
     } else {
       out.ord[[i]] <- update(out_ord_im1, newdata=train.df, cores=4, 
