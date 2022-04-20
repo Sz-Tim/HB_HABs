@@ -281,18 +281,19 @@ for(sp in 1:length(species)) {
     
     test.df %>% 
       select(obs.id) %>%
-      mutate(huf_mn=colMeans(fit.huf),
-        huf_0=apply(exp(fit.huf)-1, 2,
-                          function(x) mean(x>=target.tf$min_ge[1] &
-                                             x<=target.tf$min_ge[2])),
-        huf_1=apply(exp(fit.huf)-1, 2,
-                          function(x) mean(x>=target.tf$min_ge[2] &
-                                             x<=target.tf$min_ge[3])),
-        huf_2=apply(exp(fit.huf)-1, 2,
-                           function(x) mean(x>=target.tf$min_ge[3] &
-                                              x<=target.tf$min_ge[4])),
-        huf_3=apply(exp(fit.huf)-1, 2,
-                           function(x) mean(x>=target.tf$min_ge[4])),
+      mutate(huf_mn=colMeans(pred.huf),
+             huf_md=apply(pred.huf, 2, median),
+             huf_0=apply(exp(pred.huf)-1, 2,
+                         function(x) mean(x>=target.tf$min_ge[1] &
+                                            x<=target.tf$min_ge[2])),
+             huf_1=apply(exp(pred.huf)-1, 2,
+                         function(x) mean(x>=target.tf$min_ge[2] &
+                                            x<=target.tf$min_ge[3])),
+             huf_2=apply(exp(pred.huf)-1, 2,
+                         function(x) mean(x>=target.tf$min_ge[3] &
+                                            x<=target.tf$min_ge[4])),
+             huf_3=apply(exp(pred.huf)-1, 2,
+                         function(x) mean(x>=target.tf$min_ge[4])),
              ord_0=colMeans(pred.ord[,,1]),
              ord_1=colMeans(pred.ord[,,2]),
              ord_2=colMeans(pred.ord[,,3]),
