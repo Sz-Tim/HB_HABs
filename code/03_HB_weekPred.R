@@ -298,7 +298,7 @@ for(sp in 1:length(species)) {
              ord_1=colMeans(pred.ord[,,2]),
              ord_2=colMeans(pred.ord[,,3]),
              ord_3=colMeans(pred.ord[,,4])) %>%
-      write_csv(glue("out{sep}weekFit{sep}pred_{week_pred}.csv"))
+      write_csv(glue("out{sep}weekFit{sep}pred_{target}_{week_pred}.csv"))
     
     cat("  Fitted model \n")
   }
