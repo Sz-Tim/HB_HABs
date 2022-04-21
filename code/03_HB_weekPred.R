@@ -142,6 +142,8 @@ sampling.df <- sampling.df %>%
          month=month(date))
 weeks <- sort(unique(filter(sampling.df, year(date)>2017 & between(month, 3, 11))$wk))
 
+cl <- makeCluster(cores.sp)
+registerDoSNOW(cl)
 foreach(sp=1:length(species), 
         .packages=pkgs,
         .errorhandling="remove") %dopar% {
@@ -360,5 +362,5 @@ foreach(sp=1:length(species),
   }
 }
 
-
+stopCluster(cl)
 
