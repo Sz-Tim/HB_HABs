@@ -9,15 +9,13 @@
 
 # set up ------------------------------------------------------------------
 
-pkgs <- c("tidyverse", "lubridate", "glue", "LaplacesDemon", "brms", "WeStCOMS",
-          "foreach", "doSNOW")
+pkgs <- c("tidyverse", "lubridate", "glue", "LaplacesDemon", "brms", "WeStCOMS")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "000_fn", full.names=T), source)
 
 huf <- F
 ord <- T
-cores.sp <- 1
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
@@ -142,15 +140,11 @@ sampling.df <- sampling.df %>%
          month=month(date))
 weeks <- sort(unique(filter(sampling.df, year(date)>2017 & between(month, 3, 11))$wk))
 
-cl <- makeCluster(cores.sp)
-registerDoSNOW(cl)
-foreach(sp=1:length(species), 
-        .packages=pkgs,
-        .errorhandling="remove") %do% {
+for(sp in 1:length(species)) {
   target <- species[sp]
   target.tf <- thresh.df %>% filter(hab_parameter==target)
   out.ord <- out.huf <- vector("list", length(weeks))
-  for(i in 1:(length(weeks)-1)) {
+  for(i in 99:(length(weeks)-1)) {
     week_fit <- weeks[i]
     week_pred <- weeks[i+1]
     
@@ -362,5 +356,5 @@ foreach(sp=1:length(species),
   }
 }
 
-stopCluster(cl)
+
 
