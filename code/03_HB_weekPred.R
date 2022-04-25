@@ -15,8 +15,8 @@ suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "000_fn", full.names=T), source)
 
-huf <- T
-ord <- F
+huf <- F
+ord <- T
 cores.sp <- 1
 
 # minch2:    2013-06-20 to 2019-07-02
@@ -310,10 +310,10 @@ foreach(sp=1:length(species),
       pred.ord <- posterior_epred(out.ord[[i]], newdata=test.df, allow_new_levels=T)
       cat.iter <- apply(pred.ord, 1:2, which.max)
       pred.df <- pred.df %>%
-        mutate(ord_mnpr0=colMeans(pred.ord[,,1]),
-               ord_mnpr1=colMeans(pred.ord[,,2]),
-               ord_mnpr2=colMeans(pred.ord[,,3]),
-               ord_mnpr3=colMeans(pred.ord[,,4]),
+        mutate(ord_mnpr0=colMeans(pred.ord[,,1,drop=F]),
+               ord_mnpr1=colMeans(pred.ord[,,2,drop=F]),
+               ord_mnpr2=colMeans(pred.ord[,,3,drop=F]),
+               ord_mnpr3=colMeans(pred.ord[,,4,drop=F]),
                ord_prmax0=colMeans(cat.iter==1),
                ord_prmax1=colMeans(cat.iter==2),
                ord_prmax2=colMeans(cat.iter==3),
