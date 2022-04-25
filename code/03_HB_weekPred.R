@@ -41,7 +41,7 @@ if(.Platform$OS.type=="unix") {
 
 species <- c("alexandrium_sp", "dinophysis_sp", "karenia_mikimotoi",
              "prorocentrum_lima", "pseudo_nitzschia_sp")
-
+# species <- rev(species)
 sampling.df <- read_csv(glue("data{sep}sampling_local.csv"))
 
 thresh.df <- read_csv(glue("data{sep}hab_tf_thresholds.csv")) %>%
@@ -304,10 +304,10 @@ for(sp in 1:length(species)) {
       pred.ord <- posterior_epred(out.ord[[i]], newdata=test.df, allow_new_levels=T)
       cat.iter <- apply(pred.ord, 1:2, which.max)
       pred.df <- pred.df %>%
-        mutate(ord_mnpr0=colMeans(pred.ord[,,1,drop=F]),
-               ord_mnpr1=colMeans(pred.ord[,,2,drop=F]),
-               ord_mnpr2=colMeans(pred.ord[,,3,drop=F]),
-               ord_mnpr3=colMeans(pred.ord[,,4,drop=F]),
+        mutate(ord_mnpr0=c(colMeans(pred.ord[,,1,drop=F])),
+               ord_mnpr1=c(colMeans(pred.ord[,,2,drop=F])),
+               ord_mnpr2=c(colMeans(pred.ord[,,3,drop=F])),
+               ord_mnpr3=c(colMeans(pred.ord[,,4,drop=F])),
                ord_prmax0=colMeans(cat.iter==1),
                ord_prmax1=colMeans(cat.iter==2),
                ord_prmax2=colMeans(cat.iter==3),
