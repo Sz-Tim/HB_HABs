@@ -16,8 +16,8 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "000_fn", full.names=T), source)
 
 huf <- T
-ord <- T
-cores.sp <- 5
+ord <- F
+cores.sp <- 1
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
@@ -146,7 +146,7 @@ cl <- makeCluster(cores.sp)
 registerDoSNOW(cl)
 foreach(sp=1:length(species), 
         .packages=pkgs,
-        .errorhandling="remove") %dopar% {
+        .errorhandling="remove") %do% {
   target <- species[sp]
   target.tf <- thresh.df %>% filter(hab_parameter==target)
   out.ord <- out.huf <- vector("list", length(weeks))
@@ -280,7 +280,7 @@ foreach(sp=1:length(species),
       if(ord) {
         out.ord[[i]] <- brm(form_ordinal, train.df, cumulative("probit"),
                             prior=prior_ord, chains=4, cores=4, 
-                            iter=3000, warmup=2000, refresh=100, inits="0",
+                            iter=3000, warmup=2000, refresh=500, inits="0",
                             control=list(adapt_delta=0.95, max_treedepth=20),
                             file=glue("out{sep}weekFit{sep}ordinal_{target}_{week_fit}"))
       }
@@ -289,7 +289,7 @@ foreach(sp=1:length(species),
                             block="functions")
         out.huf[[i]] <- brm(form_huf, train.df, hurdle_frechet,
                             prior=prior_huf, chains=4, cores=4, 
-                            iter=3000, warmup=2000, refresh=100, inits="0",
+                            iter=3000, warmup=2000, refresh=500, inits="0",
                             control=list(adapt_delta=0.95, max_treedepth=20),
                             stanvars=stanvars,
                             file=glue("out{sep}weekFit{sep}huf_{target}_{week_fit}")) 
