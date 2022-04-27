@@ -138,7 +138,7 @@ form_ordinal <- bf(glue("N.catNum | thres(3) ~ {predictors_main}"))
 sampling.df <- sampling.df %>% 
   mutate(wk=floor(as.numeric(date - min(date))/7),
          month=month(date))
-weeks <- sort(unique(filter(sampling.df, year(date)>2017 & between(month, 3, 11))$wk))
+weeks <- sort(unique(filter(sampling.df, year(date)>2017 & grid==1 & between(month, 3, 11))$wk))
 
 for(sp in 1:length(species)) {
   target <- species[sp]
