@@ -140,7 +140,8 @@ for(sp in 1:length(species)) {
   target <- species[sp]
   target.tf <- thresh.df %>% filter(hab_parameter==target)
   
-  train.df <- sampling.df %>% 
+  train.df <- sampling.df %>%
+    filter(grid==1) %>% 
     rename(N=!!target) %>%
     select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
     mutate(yday=yday(date),
@@ -170,8 +171,7 @@ for(sp in 1:length(species)) {
     filter(complete.cases(.)) %>%
     select(site.id, lon, lat, date, year, obs.id, fetch, bearing,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
-           one_of(covars)) %>%
-    filter(grid==1)
+           one_of(covars))
   write_csv(train.df, glue("out{sep}fullFit_{target}_data.csv"))
   
   
