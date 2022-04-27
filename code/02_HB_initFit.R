@@ -112,10 +112,17 @@ predictors_main <- "
   (1|site.id)
 "
 
-predictors_main <- "ydayCos * ydaySin * short_wave_L_wk * temp_L_wk * 
-  precip_L_wk * salinity_L_wk * water_L_wk * water_R_wk * wind_L_wk * 
-  windDir_L_wk * waterDir_L_wk * waterDir_R_wk * fetch *
-  N.PA_1 * N.PA_2 * N.lnWt_1 * N.lnWt_2 + (1|site.id)"
+predictors_main <- "
+  short_wave_L_wk * ydayCos * ydaySin + 
+  temp_L_wk * ydayCos * ydaySin + 
+  precip_L_wk * ydayCos * ydaySin + 
+  salinity_L_wk * ydayCos * ydaySin + 
+  water_L_wk * waterDir_L_wk * ydayCos * ydaySin * fetch + 
+  water_R_wk * waterDir_R_wk * ydayCos * ydaySin * fetch + 
+  wind_L_wk * windDir_L_wk * ydayCos * ydaySin * fetch + 
+  N.PA_1 * N.PA_2 * ydayCos * ydaySin +
+  N.lnWt_1 * N.lnWt_2 * ydayCos * ydaySin + 
+  (1|site.id)"
 
 predictors_hu <- "
   ydayCos + ydaySin +

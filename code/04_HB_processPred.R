@@ -122,9 +122,9 @@ for(sp in 1:length(species)) {
            starts_with("N"), starts_with("date_"), starts_with("yday"),
            one_of(covars)) 
   
-  ordPred.df <- dir(glue("out{sep}weekFit"), glue("pred_ord_{target}"), full.names=T) %>%
+  ordPred.df <- dir(glue("out{sep}weekFitFull"), glue("pred_ord_{target}"), full.names=T) %>%
     map_dfr(~read_csv(.x, show_col_types=F))
-  hufPred.df <- dir(glue("out{sep}weekFit"), glue("pred_huf_{target}"), full.names=T) %>%
+  hufPred.df <- dir(glue("out{sep}weekFitFull"), glue("pred_huf_{target}"), full.names=T) %>%
     map_dfr(~read_csv(.x, show_col_types=F))
   
   if(nrow(hufPred.df)>0) {
@@ -136,7 +136,7 @@ for(sp in 1:length(species)) {
     pred.df <- target.df %>% select(obs.id, site.id, date, N.catF, N.ln) %>%
       right_join(., ordPred.df) %>%
       mutate(sp=target)
-    write_csv(pred.df, glue("out{sep}pred_{target}.csv"))
+    write_csv(pred.df, glue("out{sep}predFull_{target}.csv"))
   }
   
   

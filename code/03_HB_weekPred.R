@@ -114,6 +114,18 @@ predictors_main <- "
                  
   (1|site.id)
 "
+predictors_main <- "
+  short_wave_L_wk * ydayCos * ydaySin + 
+  temp_L_wk * ydayCos * ydaySin + 
+  precip_L_wk * ydayCos * ydaySin + 
+  salinity_L_wk * ydayCos * ydaySin + 
+  water_L_wk * waterDir_L_wk * ydayCos * ydaySin * fetch + 
+  water_R_wk * waterDir_R_wk * ydayCos * ydaySin * fetch + 
+  wind_L_wk * windDir_L_wk * ydayCos * ydaySin * fetch + 
+  N.PA_1 * N.PA_2 * ydayCos * ydaySin +
+  N.lnWt_1 * N.lnWt_2 * ydayCos * ydaySin + 
+  (1|site.id)"
+
 predictors_hu <- "
   ydayCos + ydaySin +
   N.PA_1:ydayCos +
@@ -184,7 +196,7 @@ for(sp in 1:length(species)) {
     if(i == 1) {
       train.df <- target.df %>% filter(wk <= week_fit)
       if(ord) {
-        out_ord_im1 <- readRDS(glue("out{sep}initFit{sep}ordinal_{target}.rds")) 
+        out_ord_im1 <- readRDS(glue("out{sep}initFitFull{sep}ordinal_{target}.rds")) 
       }
       if(huf) {
         out_huf_im1 <- readRDS(glue("out{sep}initFit{sep}huf_{target}.rds")) 
@@ -192,7 +204,7 @@ for(sp in 1:length(species)) {
     } else {
       train.df <- target.df %>% filter(wk == week_fit)
       if(ord) {
-        out_ord_im1 <- readRDS(glue("out{sep}weekFit{sep}ordinal_{target}_{weeks[i-1]}.rds"))  
+        out_ord_im1 <- readRDS(glue("out{sep}weekFitFull{sep}ordinal_{target}_{weeks[i-1]}.rds"))  
       }
       if(huf) {
         out_huf_im1 <- readRDS(glue("out{sep}weekFit{sep}huf_{target}_{weeks[i-1]}.rds"))  
@@ -276,7 +288,7 @@ for(sp in 1:length(species)) {
                             prior=prior_ord, chains=4, cores=4, 
                             iter=3000, warmup=2000, refresh=500, inits="0",
                             control=list(adapt_delta=0.95, max_treedepth=20),
-                            file=glue("out{sep}weekFit{sep}ordinal_{target}_{week_fit}"))
+                            file=glue("out{sep}weekFitFull{sep}ordinal_{target}_{week_fit}"))
       }
       if(huf) {
         stanvars <- stanvar(scode=readr::read_file(glue("models{sep}hurdle_frechet_fn.stan")),
@@ -291,7 +303,7 @@ for(sp in 1:length(species)) {
     } else {
       if(ord) {
         out.ord[[i]] <- update(out_ord_im1, newdata=train.df, cores=4, 
-                               prior=prior_ord, file=glue("out{sep}weekFit{sep}ordinal_{target}_{week_fit}")) 
+                               prior=prior_ord, file=glue("out{sep}weekFitFull{sep}ordinal_{target}_{week_fit}")) 
       }
       if(huf) {
         out.huf[[i]] <- update(out_huf_im1, newdata=train.df, cores=4,
@@ -347,7 +359,7 @@ for(sp in 1:length(species)) {
     if(ord & huf) {
       write_csv(pred.df, glue("out{sep}weekFit{sep}pred_{target}_{week_pred}.csv"))
     } else if(ord) {
-      write_csv(pred.df, glue("out{sep}weekFit{sep}pred_ord_{target}_{week_pred}.csv"))
+      write_csv(pred.df, glue("out{sep}weekFitFull{sep}pred_ord_{target}_{week_pred}.csv"))
     } else {
       write_csv(pred.df, glue("out{sep}weekFit{sep}pred_huf_{target}_{week_pred}.csv"))
     }
