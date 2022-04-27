@@ -172,13 +172,27 @@ for(sp in 1:length(species)) {
            starts_with("N"), starts_with("date_"), starts_with("yday"),
            one_of(covars)) %>%
     filter(year <= 2019)
+  write_csv(train.df, glue("out{sep}fullFit_{target}_data.csv"))
   
   
   # Priors
   if(ord) {
-    ord.f <- dir(glue("out{sep}weekFit"), glue("ordinal_{target}"), full.names=T)
-    ord.f <- ord.f[length(ord.f)]
+    ord.f <- dir(glue("out{sep}weekFit"), glue("ordinal_{target}.*310"), full.names=T)
     out_ord_im1 <- readRDS(ord.f)  
+    pred.ord <- posterior_epred(out_ord_im1, newdata=train.df, allow_new_levels=T)
+    cat.iter <- apply(pred.ord, 1:2, which.max)
+    pred.df <- train.df %>%
+      mutate(ord_mnpr0=c(colMeans(pred.ord[,,1,drop=F])),
+             ord_mnpr1=c(colMeans(pred.ord[,,2,drop=F])),
+             ord_mnpr2=c(colMeans(pred.ord[,,3,drop=F])),
+             ord_mnpr3=c(colMeans(pred.ord[,,4,drop=F])),
+             ord_prmax0=colMeans(cat.iter==1),
+             ord_prmax1=colMeans(cat.iter==2),
+             ord_prmax2=colMeans(cat.iter==3),
+             ord_prmax3=colMeans(cat.iter==4),
+             ord_mnCat=colMeans(cat.iter),
+             ord_wtmnCat=ord_mnpr0 + 2*ord_mnpr1 + 3*ord_mnpr2 + 4*ord_mnpr3)
+    write_csv(pred.df, glue("out{sep}fullFit{sep}lastWeek_{target}.csv"))
     
     b_ord_im1 <- as_draws_df(out_ord_im1, variable="b_", regex=T) %>%
       pivot_longer(cols=starts_with("b_"), names_to="param", values_to="val") %>%
@@ -201,17 +215,18 @@ for(sp in 1:length(species)) {
     prior_ord.ls[[nrow(b_ord_im1)+1]] <- prior_string(glue("normal({sd_im1$Estimate},{sqrt(sd_im1$Est.Error)})"),
                                                       class="sd")
     prior_ord <- do.call(rbind, prior_ord.ls)
+    out.ord[[sp]] <- brm(form_ordinal, data=train.df,
+                         family=cumulative("probit"), 
+                         chains=4, cores=4, 
+                         iter=2000, warmup=1000, refresh=100, inits="0",
+                         control=list(adapt_delta=0.95, max_treedepth=20),
+                         prior=prior_ord,
+                         save_model=glue("out{sep}fullFit{sep}ordinal_{target}.stan"),
+                         file=glue("out{sep}fullFit{sep}ordinal_{target}"))
   }
   
   
-  out.ord[[sp]] <- brm(form_ordinal, data=train.df,
-                       family=cumulative("probit"), 
-                       chains=4, cores=4, 
-                       iter=2000, warmup=1000, refresh=100, inits="0",
-                       control=list(adapt_delta=0.95, max_treedepth=20),
-                       prior=prior_huf,
-                       save_model=glue("out{sep}fullFit{sep}ordinal_{target}.stan"),
-                       file=glue("out{sep}fullFit{sep}ordinal_{target}"))
+
   
   cat("Finished", target, "\n")
 }
