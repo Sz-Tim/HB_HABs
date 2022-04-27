@@ -171,7 +171,7 @@ for(sp in 1:length(species)) {
     select(site.id, lon, lat, date, year, obs.id, fetch, bearing,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
            one_of(covars)) %>%
-    filter(year <= 2019)
+    filter(grid==1)
   write_csv(train.df, glue("out{sep}fullFit_{target}_data.csv"))
   
   
