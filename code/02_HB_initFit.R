@@ -111,6 +111,12 @@ predictors_main <- "
                  
   (1|site.id)
 "
+
+predictors_main <- "ydayCos * ydaySin * short_wave_L_wk * temp_L_wk * 
+  precip_L_wk * salinity_L_wk * water_L_wk * water_R_wk * wind_L_wk * 
+  windDir_L_wk * waterDir_L_wk * waterDir_R_wk * fetch *
+  N.PA_1 * N.PA_2 * N.lnWt_1 * N.lnWt_2 + (1|site.id)"
+
 predictors_hu <- "
   ydayCos + ydaySin +
   N.PA_1:ydayCos +
@@ -172,18 +178,18 @@ for(sp in 1:length(species)) {
            one_of(covars)) %>%
     filter(year <= 2017)
   
-  stanvars <- stanvar(scode=readr::read_file(glue("models{sep}hurdle_frechet_fn.stan")),
-                      block="functions")
-  
-  out.huf[[sp]] <- brm(form_huf, data=train.df,
-                       family=hurdle_frechet(), stanvars=stanvars,
-                       chains=4, cores=4, init="0",
-                       iter=2000, warmup=1000, refresh=100,
-                       control=list(adapt_delta=0.95, max_treedepth=20),
-                       prior=c(prior(normal(2, 1), "Intercept", dpar="hu"),
-                               prior(horseshoe(3, par_ratio=0.2), "b")),
-                       save_model=glue("out{sep}initFit{sep}huf_{target}.stan"),
-                       file=glue("out{sep}initFit{sep}huf_{target}"))
+  # stanvars <- stanvar(scode=readr::read_file(glue("models{sep}hurdle_frechet_fn.stan")),
+  #                     block="functions")
+  # 
+  # out.huf[[sp]] <- brm(form_huf, data=train.df,
+  #                      family=hurdle_frechet(), stanvars=stanvars,
+  #                      chains=4, cores=4, init="0",
+  #                      iter=2000, warmup=1000, refresh=100,
+  #                      control=list(adapt_delta=0.95, max_treedepth=20),
+  #                      prior=c(prior(normal(2, 1), "Intercept", dpar="hu"),
+  #                              prior(horseshoe(3, par_ratio=0.2), "b")),
+  #                      save_model=glue("out{sep}initFit{sep}huf_{target}.stan"),
+  #                      file=glue("out{sep}initFit{sep}huf_{target}"))
   
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                        family=cumulative("probit"), 
@@ -191,8 +197,8 @@ for(sp in 1:length(species)) {
                        iter=2000, warmup=1000, refresh=100, inits="0",
                        control=list(adapt_delta=0.95, max_treedepth=20),
                        prior=prior(horseshoe(3, par_ratio=0.2), class="b"),
-                       save_model=glue("out{sep}initFit{sep}ordinal_{target}.stan"),
-                       file=glue("out{sep}initFit{sep}ordinal_{target}"))
+                       save_model=glue("out{sep}initFitFull{sep}ordinal_{target}.stan"),
+                       file=glue("out{sep}initFitFull{sep}ordinal_{target}"))
   
   cat("Finished", target, "\n")
 }
