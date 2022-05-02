@@ -36,7 +36,7 @@ thresh.df <- read_csv("data\\hab_tf_thresholds.csv") %>%
   slice_head(n=1) %>%
   ungroup
 
-pred.df <- dir("out", "pred_.*csv", full.names=T) %>% 
+pred.df <- dir("out", "predFull_.*csv", full.names=T) %>% 
   map(~read_csv(.x, show_col_types=F)) %>% bind_rows
 
 poster_theme <- theme_classic() + 
@@ -48,7 +48,50 @@ poster_theme <- theme_classic() +
         strip.text=element_text(size=18))
 
 tl.col <- c("green3", "gold1", "orange", "red")
-sams.cols <- c("#2A5883", "#46BFDE", "#E77334", "#D21E4C", "#A9DAE0")
+sams.cols <- c("alexandrium_sp"="#2A5883",
+               "dinophysis_sp"="#46BFDE", 
+               "prorocentrum_lima"="#E77334", 
+               "pseudo_nitzschia_sp"="#D21E4C", 
+               "karenia_mikimotoi"="#A9DAE0")
+
+
+predPrmax.df <- pred.df %>% 
+  select(obs.id, site.id, date, sp, contains("ord_prmax"), N.catF) %>%
+  pivot_longer(ends_with(c("0", "1", "2", "3")), 
+               names_to="predCat", values_to="prob") %>%
+  mutate(predCat=str_sub(predCat, -1, -1)) %>%
+  mutate(predCat=factor(predCat, labels=sort(unique(N.catF)), ordered=T),
+         N.catF=factor(N.catF, labels=sort(unique(N.catF)), ordered=T)) %>%
+  group_by(sp, obs.id) %>%
+  arrange(desc(prob)) %>%
+  slice_head(n=1) %>%
+  ungroup 
+
+sp.rho <- predPrmax.df %>%
+  group_by(sp) %>%
+  summarise(r=cor(as.numeric(N.catF), as.numeric(predCat), method="spearman"))
+
+pred.ls <- predPrmax.df %>% 
+  group_by(sp, N.catF, predCat) %>% 
+  summarise(N=n()) %>% ungroup %>%
+  pivot_wider(names_from=predCat, values_from=N, names_prefix="pred_", values_fill=0) %>%
+  group_by(sp) %>%
+  group_split() 
+sp.somersDelta <- map_dbl(pred.ls, ~.x %>% select(3:6) %>% as.matrix() %>% as.table() %>%
+                            SomersDelta(., direction="row"))
+
+sp.df <- tibble(sp=c("alexandrium_sp", "dinophysis_sp", "karenia_mikimotoi",
+                     "prorocentrum_lima", "pseudo_nitzschia_sp"),
+                sp_clean=c("Alexandrium sp.", "Dinophysis sp.",
+                           "Karenia mikimotoi", "Prorocentrum lima",
+                           "Pseudo-nitzschia sp."),
+                sp_expr=c("italic(Alexandrium~sp.)", "italic(Dinophysis~sp.)",
+                          "italic(Karenia~mikimotoi)", "italic(Prorocentrum~lima)",
+                          "italic(Pseudonitzschia~sp.)"),
+                sp_rho=paste0(sp_clean, ", r: ", str_pad(round(sp.rho$r, 2), 4, "r", "0")),
+                sp_Dxy=paste0(sp_clean, ", Dxy: ", str_pad(round(sp.somersDelta, 2), 4, "r", "0")),
+                sp_rho_expr=paste0("list(", sp_expr, ",rho==", str_pad(round(sp.rho$r, 2), 4, "r", "0"), ")"),
+                sp_Dxy_expr=paste0("atop(", sp_expr, ",D==", str_pad(round(sp.somersDelta, 2), 4, "r", "0"), ")"))
 
 
 
@@ -199,44 +242,6 @@ ggsave("figs\\poster\\sim_ordinal_pred.png", height=7, width=3, dpi=300)
 
 # forecast barplots -------------------------------------------------------
 
-predPrmax.df <- pred.df %>% 
-  select(obs.id, site.id, date, sp, contains("ord_prmax"), N.catF) %>%
-  pivot_longer(ends_with(c("0", "1", "2", "3")), 
-               names_to="predCat", values_to="prob") %>%
-  mutate(predCat=str_sub(predCat, -1, -1)) %>%
-  mutate(predCat=factor(predCat, labels=sort(unique(N.catF)), ordered=T),
-         N.catF=factor(N.catF, labels=sort(unique(N.catF)), ordered=T)) %>%
-  group_by(sp, obs.id) %>%
-  arrange(desc(prob)) %>%
-  slice_head(n=1) %>%
-  ungroup 
-
-sp.rho <- predPrmax.df %>%
-  group_by(sp) %>%
-  summarise(r=cor(as.numeric(N.catF), as.numeric(predCat), method="spearman"))
-
-pred.ls <- predPrmax.df %>% 
-  group_by(sp, N.catF, predCat) %>% 
-  summarise(N=n()) %>% ungroup %>%
-  pivot_wider(names_from=predCat, values_from=N, names_prefix="pred_", values_fill=0) %>%
-  group_by(sp) %>%
-  group_split() 
-sp.somersDelta <- map_dbl(pred.ls, ~.x %>% select(3:6) %>% as.matrix() %>% as.table() %>%
-           SomersDelta(., direction="row"))
-
-sp.df <- tibble(sp=c("alexandrium_sp", "dinophysis_sp", "karenia_mikimotoi",
-                     "prorocentrum_lima", "pseudo_nitzschia_sp"),
-                sp_clean=c("Alexandrium sp.", "Dinophysis sp.",
-                           "Karenia mikimotoi", "Prorocentrum lima",
-                           "Pseudo-nitzschia sp."),
-                sp_expr=c("italic(Alexandrium~sp.)", "italic(Dinophysis~sp.)",
-                           "italic(Karenia~mikimotoi)", "italic(Prorocentrum~lima)",
-                           "italic(Pseudonitzschia~sp.)"),
-                sp_rho=paste0(sp_clean, ", r: ", str_pad(round(sp.rho$r, 2), 4, "r", "0")),
-                sp_Dxy=paste0(sp_clean, ", Dxy: ", str_pad(round(sp.somersDelta, 2), 4, "r", "0")),
-                sp_rho_expr=paste0("list(", sp_expr, ",rho==", str_pad(round(sp.rho$r, 2), 4, "r", "0"), ")"),
-                sp_Dxy_expr=paste0("atop(", sp_expr, ",D==", str_pad(round(sp.somersDelta, 2), 4, "r", "0"), ")"))
-
 predPrmax.df %>%
   mutate(predRev=factor(predCat, levels=rev(levels(predCat)))) %>%
   full_join(., sp.df) %>%
@@ -276,17 +281,35 @@ predPrmax.df %>%
   full_join(., sp.df) %>%
   ggplot(aes(predRev, fill=N.catF)) + geom_hline(yintercept=0, colour="grey30", size=0.25) + 
   geom_bar(colour="grey30") +
-  scale_fill_manual("Observed", values=tl.col, labels=c("0", "Low", "Med.", "High")) +
+  scale_fill_manual("Obs.", values=tl.col, labels=c("0", "L", "M", "H")) +
   scale_x_discrete(labels=rev(c("0", "Low", "Med.", "High"))) +
   scale_y_continuous(breaks=c(0, 400, 800), labels=c("0", "400", "800"), limits=c(0, 1000)) +
-  labs(x="Forecasted", y="Count") + 
+  labs(title="Forecasting performance", x="Forecasted", y="Count") + 
   facet_wrap(~sp_Dxy_expr, ncol=5, labeller=label_parsed) + 
   poster_theme + 
   theme(strip.text=element_text(face="italic"),
         axis.text=element_text(size=14),
+        axis.title=element_text(size=16),
+        plot.title=element_text(size=18),
         strip.text.x=element_text(size=14)) +
   coord_flip()
 ggsave("figs\\poster\\forecast_counts.png", height=3, width=14, dpi=300)
+
+predPrmax.df %>%
+  full_join(., sp.df) %>%
+  ggplot(aes(predCat, fill=N.catF)) + geom_hline(yintercept=0, colour="grey30", size=0.25) + 
+  geom_bar(colour="grey30") +
+  scale_fill_manual(values=tl.col) +
+  scale_x_discrete(labels=c("0", "Low", "Med.", "High")) +
+  scale_y_continuous(breaks=c(0, 400, 800), labels=c("0", "400", "800"), limits=c(0, 1000)) +
+  labs(x="Forecasted", y="Count") + 
+  facet_wrap(~sp_Dxy_expr, ncol=1, labeller=label_parsed) + 
+  poster_theme + 
+  theme(legend.position="none", 
+        strip.text=element_text(face="italic"),
+        axis.text=element_text(size=14),
+        strip.text.x=element_text(size=14))
+ggsave("figs\\poster\\forecast_counts_tall.png", height=14, width=3, dpi=300)
 
 predPrmax.df %>%
   full_join(., sp.df) %>%
@@ -379,28 +402,30 @@ obs.df %>%
   geom_histogram(colour="grey30", size=0.5, bins=15) +
   scale_fill_manual(values=tl.col, guide="none") +
   poster_theme + 
-  theme(strip.text=element_text(face="italic"),
+  theme(legend.position="none", 
+        strip.text=element_text(face="italic"),
         axis.text=element_text(size=14),
-        strip.text.y=element_text(size=12)) +
-  labs(title="Observed distributions",
-       x="ln(cells/L)") +
-  facet_wrap(~sp_clean, ncol=1, scales="free", strip.position="right")
-ggsave("figs\\poster\\observed_data_distr.png", height=11, width=4, dpi=300)
+        strip.text.x=element_text(size=14)) +
+  labs(x="ln(cells/L)") +
+  facet_wrap(~sp_clean, ncol=1, scales="free")
+ggsave("figs\\poster\\observed_data_distr.png", height=12, width=3, dpi=300)
 
 obs.df %>%
   full_join(., sp.df) %>%
   ggplot(aes(N.ln, fill=N.cat)) + 
   geom_histogram(colour="grey30", size=0.5, bins=15) +
-  scale_fill_manual("Observed", values=tl.col, labels=c("0", "Low", "Med.", "High")) +
+  scale_fill_manual("Obs.", values=tl.col, labels=c("0", "L", "M", "H")) +
   poster_theme + 
   theme(strip.text=element_text(face="italic"),
         axis.text=element_text(size=14),
         strip.text.y=element_text(size=12)) +
-  labs(x="ln(cells/L)") +
+  labs(title="Observed distributions", x="ln(cells/L)") +
   facet_wrap(~sp_clean, ncol=5) +
   theme(strip.text=element_text(face="italic"),
         axis.text=element_text(size=14),
-        strip.text.x=element_text(size=16))
+        axis.title=element_text(size=16),
+        plot.title=element_text(size=18),
+        strip.text.x=element_text(size=14))
 ggsave("figs\\poster\\observed_data_distr2.png", height=3, width=14, dpi=300)
 
 obs.df %>%
@@ -507,7 +532,7 @@ axis(side=1, at=c(0, 0.5, 1))
 axis(side=2, at=c(0, 0.5, 1))
 abline(a=0, b=1, col="grey30", lwd=0.5)
 map(1:4, ~lines(1-roc.ls[[.x]]$specificities, roc.ls[[.x]]$sensitivities, 
-                col=sams.cols[.x], lwd=2))
+                col=sams.cols[binary.df[[.x]]$sp[1]], lwd=2))
 dev.off()
 
 map(roc.ls, ~.x$auc)
@@ -520,8 +545,9 @@ map(roc.ls, ~.x$auc)
 
 # covariates --------------------------------------------------------------
 
-out.ls <- dir("out\\fullFit", "ordinal.*rds", full.names=T) %>% map(readRDS)
-out.ls <- dir("out\\weekFit", "ordinal.*310.rds", full.names=T) %>% map(readRDS)
+out.ls <- dir("out\\fullFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
+out.ls <- dir("out\\initFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
+out.ls <- dir("out\\weekFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
 
 conditional_effects(out.ls[[2]])
 
@@ -545,7 +571,7 @@ for(i in 1:5) {
            pred_sp=sp.df$sp[i])
 }
 eff.df <- do.call('rbind', eff.ls) 
-saveRDS(eff.df, "out\\fullFit_all.rds")
+saveRDS(eff.df, "out\\fullFitFull_all.rds")
 
 eff.df <- readRDS("out\\fullFit_all.rds")
 eff.max <- eff.df %>% 
@@ -579,18 +605,42 @@ ggplot(fixed.df, aes(Estimate, sp)) +
 # ydayCos:N.PA_1
 # ydayCos:temp_L_wk
 
+fixed.df %>% 
+  mutate(param1=str_split_fixed(param, ":", 2)[,1],
+         param2=str_split_fixed(param, ":", 2)[,2]) %>%
+  pivot_longer(cols=c("param1", "param2"), names_to="parSub", values_to="parName") %>%
+  group_by(parName) %>%
+  summarise(N=n()) %>%
+  ungroup %>%
+  arrange(desc(N))
 
 
 
 
 
-ggplot(eff.max, aes(yday, prob, group=predCat, colour=predCat)) + 
-  geom_point() + facet_wrap(~pred_sp)
 
 ggplot(eff.df, aes(yday, ord_mnCat, group=pred_sp, colour=pred_sp)) + 
   stat_smooth(se=F) + scale_colour_manual(values=sams.cols)
+ggplot(eff.df, aes(date, ord_mnCat, group=pred_sp, colour=pred_sp)) + 
+  stat_smooth(se=F, span=0.1) + scale_colour_manual(values=sams.cols)
+
 ggplot(eff.df, aes(yday, ord_mnCat, group=pred_sp, colour=pred_sp)) + 
   geom_point() + scale_colour_manual(values=sams.cols) + facet_wrap(~pred_sp)
+ggplot(eff.df, aes(date, ord_mnCat, group=pred_sp, colour=pred_sp)) + 
+  geom_point() + scale_colour_manual(values=sams.cols) + facet_wrap(~pred_sp)
+
+ggplot(eff.df, aes(yday, ord_mnCat, group=paste(site.id, year), colour=pred_sp)) + 
+  geom_line(alpha=0.2) + scale_colour_manual(values=sams.cols) + facet_wrap(~pred_sp)
+ggplot(eff.df, aes(date, ord_mnCat, group=paste(site.id, year), colour=pred_sp)) + 
+  geom_line(alpha=0.25) + scale_colour_manual(values=sams.cols) + facet_wrap(~pred_sp)
+
+eff.max %>% 
+  group_by(date, pred_sp, predCat) %>%
+  summarise(N_pred=n()) %>%
+  group_by(date, pred_sp) %>%
+  mutate(prop_pred=N_pred/sum(N_pred)) %>%
+  ggplot(aes(date, prop_pred, colour=predCat)) + geom_line() +
+  facet_wrap(~pred_sp)
 
 
 eff.df %>%
@@ -612,10 +662,12 @@ eff.df %>%
   # facet_wrap(~site.id)
   facet_grid(pred_sp~site.id)
 
-site_sample <- sample(unique(pred.df$site.id), 5)
+# 146
+site_sample <- 146# sample(unique(pred.df$site.id), 1)
 pred.df %>%
   filter(site.id %in% site_sample) %>%
   filter(year(date)==2018) %>%
+  full_join(., sp.df) %>%
   ggplot(aes(date, ymax=ord_mnCat, ymin=1, group=sp, 
              fill=sp, colour=sp)) + 
   geom_ribbon(size=0.5, alpha=0.5) + 
@@ -624,9 +676,15 @@ pred.df %>%
   scale_colour_manual(values=sams.cols, guide="none") +
   scale_y_continuous(breaks=1:4, labels=c("0", "Low", "Med.", "High")) +
   poster_theme +
-  labs(x="", y="Mean forecast") +
-  # facet_wrap(~site.id)
-  facet_grid(sp~site.id)
+  labs(title="Example timeseries", x="", y="Mean forecast") +
+  facet_wrap(~sp_clean, ncol=3) +
+  theme(strip.text=element_text(face="italic"),
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=18),
+        axis.title.x=element_blank(),
+        plot.title=element_text(size=20),
+        strip.text.x=element_text(size=16))
+ggsave("figs\\poster\\sample_timeseries.png", height=4, width=8, dpi=300)
 
 predPrmax.df %>%
   group_by(sp, site.id) %>%
