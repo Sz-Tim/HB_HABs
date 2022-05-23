@@ -185,12 +185,12 @@ for(sp in 1:length(species)) {
     select(site.id, lon, lat, date, year, obs.id, fetch, bearing,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
            one_of(covars))
-  write_csv(train.df, glue("out{sep}fullFitFull_{target}_data.csv"))
+  write_csv(train.df, glue("out{sep}fullFit_{target}_data.csv"))
   
   
   # Priors
   if(ord) {
-    ord.f <- dir(glue("out{sep}weekFitFull"), glue("ordinal_{target}.*310"), full.names=T)
+    ord.f <- dir(glue("out{sep}weekFit"), glue("ordinal_{target}.*310"), full.names=T)
     out_ord_im1 <- readRDS(ord.f)  
     pred.ord <- posterior_epred(out_ord_im1, newdata=train.df, allow_new_levels=T)
     cat.iter <- apply(pred.ord, 1:2, which.max)
@@ -205,7 +205,7 @@ for(sp in 1:length(species)) {
              ord_prmax3=colMeans(cat.iter==4),
              ord_mnCat=colMeans(cat.iter),
              ord_wtmnCat=ord_mnpr0 + 2*ord_mnpr1 + 3*ord_mnpr2 + 4*ord_mnpr3)
-    write_csv(pred.df, glue("out{sep}fullFitFull{sep}lastWeek_{target}.csv"))
+    write_csv(pred.df, glue("out{sep}fullFit{sep}lastWeek_{target}.csv"))
     
     b_ord_im1 <- as_draws_df(out_ord_im1, variable="b_", regex=T) %>%
       pivot_longer(cols=starts_with("b_"), names_to="param", values_to="val") %>%
@@ -234,8 +234,8 @@ for(sp in 1:length(species)) {
                          iter=2000, warmup=1000, refresh=100, inits="0",
                          control=list(adapt_delta=0.95, max_treedepth=20),
                          prior=prior_ord,
-                         save_model=glue("out{sep}fullFitFull{sep}ordinal_{target}.stan"),
-                         file=glue("out{sep}fullFitFull{sep}ordinal_{target}"))
+                         save_model=glue("out{sep}fullFit{sep}ordinal_{target}.stan"),
+                         file=glue("out{sep}fullFit{sep}ordinal_{target}"))
   }
   
   

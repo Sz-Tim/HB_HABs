@@ -6,14 +6,18 @@
 
 library(tidyverse)
 library(cmdstanr)
-library(bayesplot)
+library(bayesplot); theme_set(theme_classic())
 
 
 # Simulate data
-N <- 2e2
-x <- cbind(1, sort(runif(N, -2, 2)))
-b_01 <- c(boot::logit(0.1), -3)
-b_11 <- c(boot::logit(0.3), -1.5)
+N <- 5e2
+x <- cbind(1, 
+           cos(1:N * 2 * pi / N),
+           sin(1:N * 2 * pi / N),
+           rnorm(N))
+colnames(x) <- c("Intercept", paste0("X", 2:ncol(x)))
+b_01 <- c(boot::logit(0.05), rnorm(ncol(x)-1))
+b_11 <- c(boot::logit(0.3), rnorm(ncol(x)-1))
 p_01 <- boot::inv.logit(x %*% b_01)
 p_11 <- boot::inv.logit(x %*% b_11)
 y <- rep(0, N+1)
@@ -27,12 +31,15 @@ for(i in 1:N) {
 
 
 plot(y, type="l", ylim=c(0,1))
-plot(x[,2], y[2:(N+1)])
-plot(x[,2], y[2:(N+1)]-y[1:N])
 plot(x[,2], p_01, ylim=c(0,1))
+plot(x[,3], p_01, ylim=c(0,1))
+plot(x[,4], p_01, ylim=c(0,1))
 plot(x[,2], p_11, ylim=c(0,1))
+plot(x[,3], p_11, ylim=c(0,1))
+plot(x[,4], p_11, ylim=c(0,1))
 
 data.ls <- list(N=N,
+                K=ncol(x)-1,
                 y=y[-1],
                 y_lag=y[-(N+1)],
                 x=x)
@@ -43,8 +50,8 @@ mod <- cmdstan_model("models/state_transition.stan")
 fit <- mod$sample(data=data.ls, refresh=1000, parallel_chains=4)
 
 tibble(true=c(b_01, b_11)) %>%
-  bind_cols(fit$summary(c(paste0("b_01[", 1:2, "]"), 
-                          paste0("b_11[", 1:2, "]"))))
+  bind_cols(fit$summary(c(paste0("b_01[", seq_along(b_01), "]"), 
+                          paste0("b_11[", seq_along(b_11), "]"))))
 
 fit$summary("y_pred") %>%
   mutate(true=data.ls$y,
@@ -54,29 +61,33 @@ fit$summary("y_pred") %>%
 
 fit$summary("y_pred") %>%
   mutate(true=data.ls$y,
-         y_lag=data.ls$y_lag) %>%
-  filter(y_lag==0 & true==1) %>%
-  ggplot(aes(mean)) + geom_density()
+         y_lag=data.ls$y_lag,
+         bloom_t=true==1,
+         bloom_tm1=y_lag==1) %>%
+  ggplot(aes(mean, colour=bloom_t)) + geom_density() + facet_wrap(~bloom_tm1)
 
 fit$summary("p_01") %>%
   mutate(true=p_01) %>%
-  ggplot(aes(mean, true)) + geom_point(alpha=0.2) +
+  ggplot(aes(mean, true)) + geom_point(alpha=0.2) + geom_abline() + 
   xlim(0,1) + ylim(0,1)
 
 fit$summary("p_11") %>%
   mutate(true=p_11) %>%
-  ggplot(aes(mean, true)) + geom_point(alpha=0.2) +
+  ggplot(aes(mean, true)) + geom_point(alpha=0.2) + geom_abline() + 
   xlim(0,1) + ylim(0,1)
 
 
 
 
-sim.df <- tibble(x=x[,2], 
-                 y=data.ls$y) %>%
-  mutate(y_lag=data.ls$y_lag)
+sim.df <- as_tibble(x[,-1]) %>%
+  mutate(y=data.ls$y,
+         y_lag=data.ls$y_lag)
 noBloom.df <- sim.df %>% filter(y_lag==0)
 bloom.df <- sim.df %>% filter(y_lag==1)
-noBloom.brm <- brms::brm(y ~ x, data=noBloom.df, family=brms::bernoulli())
-bloom.brm <- brms::brm(y ~ x, data=bloom.df, family=brms::bernoulli())
+brm.form <- paste("y ~", paste(colnames(x)[-1], collapse=" + "))
+noBloom.brm <- brms::brm(brm.form , 
+                         data=noBloom.df, family=brms::bernoulli())
+bloom.brm <- brms::brm(brm.form, 
+                       data=bloom.df, family=brms::bernoulli())
 
 
