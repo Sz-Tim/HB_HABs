@@ -132,9 +132,6 @@ predictors_s <- c(
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
   "Nbloom1", "Nbloom2"
 )
-predictors_s <- c(
-  "tempLwk", "phwk", "Nbloom1", "Nbloom2"
-)
 
 s_b <- glue("b{predictors_s}") 
 s_flist <- map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)")))
@@ -157,10 +154,9 @@ s_form_bern <- bf(
 
 form_ordinal <- bf(glue("NcatNum | thres(3) ~ {paste(predictors_int, collapse=' + ')}"))
 form_bern <- bf(glue("Nbloom ~ {paste(predictors_int, collapse=' + ')}"))
-form_bern_noCatF <- bf(glue("Nbloom ~ {paste(grep('catF_1', predictors_int, value=T, invert=T), collapse=' + ')}"))
+form_bern_noCatF <- bf(glue("Nbloom ~ {paste(grep('catF1', predictors_int, value=T, invert=T), collapse=' + ')}"))
 
-priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
-            prior(normal(0, 1), class="Intercept"))
+priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"))
 s_priors <- map(s_b, 
                 ~prior_string(prior="normal(0, 1)", nlpar=.x)) %>% 
   do.call('c', .) %>%
@@ -171,9 +167,9 @@ s_priors <- map(s_b,
 # Model details
 ctrl <- list(adapt_delta=0.95, max_treedepth=20)
 chains <- 4
-iter <- 100
+iter <- 2000
 warmup <- iter/2
-refresh <- 100
+refresh <- 50
 
 
 
