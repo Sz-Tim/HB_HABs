@@ -181,7 +181,7 @@ refresh <- 100
 
 # initial fit -------------------------------------------------------------
 
-out.bern01 <- out.bern11 <- out.sbern01 <- out.sbern11 <- out.ord <- vector("list", length(species))
+out.bern01 <- out.bern11 <- out.sbern01 <- out.sbern11 <- out.ord <- out.sord <- vector("list", length(species))
 
 for(sp in 1:length(species)) {
   target <- species[sp]
