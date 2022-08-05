@@ -198,10 +198,12 @@ for(sp in 1:length(species)) {
   priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
               prior(normal(0, 1), class="Intercept"))
   ctrl <- list(adapt_delta=0.95, max_treedepth=20)
+  chains <- 4
+  
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                        family=cumulative("probit"),
                        iter=2000, warmup=1000, refresh=100, init=0,
-                       control=ctrl, prior=priors, chains=3, cores=3,
+                       control=ctrl, prior=priors, chains=chains, cores=chains,
                        file=glue("out{sep}test_full{sep}ord_{target}"))
   if(n_distinct(filter(train.df, N.bloom_1==0)$N.catF_1)==1) {
     form_01 <- form_bern_noCatF
@@ -210,17 +212,13 @@ for(sp in 1:length(species)) {
   }
   out.noBloom[[sp]] <- brm(form_01, data=train.df %>% filter(N.bloom_1==0),
                            family=bernoulli("probit"), 
-                           chains=3, cores=3, 
-                           iter=2000, warmup=1000, refresh=500, init=0,
-                           control=list(adapt_delta=0.95, max_treedepth=20),
-                           prior=prior(horseshoe(3, par_ratio=0.2), class="b"),
+                           iter=2000, warmup=1000, refresh=100, init=0,
+                           control=ctrl, prior=priors, chains=chains, cores=chains,
                            file=glue("out{sep}test_full{sep}bern01_{target}"))
   out.bloom[[sp]] <- brm(form_bern, data=train.df %>% filter(N.bloom_1==1),
                          family=bernoulli("probit"), 
-                         chains=3, cores=3, 
-                         iter=2000, warmup=1000, refresh=500, init=0,
-                         control=list(adapt_delta=0.95, max_treedepth=20),
-                         prior=prior(horseshoe(3, par_ratio=0.2), class="b"),
+                         iter=2000, warmup=1000, refresh=100, init=0,
+                         control=ctrl, prior=priors, chains=chains, cores=chains,
                          file=glue("out{sep}test_full{sep}bern11_{target}"))
   
   train.rf01 <- train.rf %>% filter(N.bloom_1==0)
