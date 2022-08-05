@@ -222,8 +222,8 @@ for(sp in 1:length(species)) {
                          file=glue("out{sep}test_full{sep}bern11_{target}"))
   
   train.rf <- train.df %>%
-    select(N.bloom, 
-           site.id, lon, lat, 
+    select(N.bloom, N.bloom_1,
+           lon, lat, 
            ydaySin, ydayCos, fetch,
            N.ln_1, N.cat_1, 
            N.ln_2, N.cat_2, 
@@ -232,8 +232,8 @@ for(sp in 1:length(species)) {
     mutate(N.bloom=factor(N.bloom)) %>%
     as.data.frame()
   test.rf <- test.df %>%
-    select(N.bloom, 
-           site.id, lon, lat, 
+    select(N.bloom, N.bloom_1,
+           lon, lat, 
            ydaySin, ydayCos, fetch,
            N.ln_1, N.cat_1, 
            N.ln_2, N.cat_2, 
