@@ -155,9 +155,9 @@ s_form_bern <- bf(
   flist=s_flist,
   nl=T)
 
-form_ordinal <- bf(glue("N.catNum | thres(3) ~ {paste(predictors_int, collapse=' + ')}"))
-form_bern <- bf(glue("N.bloom ~ {paste(predictors_int, collapse=' + ')}"))
-form_bern_noCatF <- bf(glue("N.bloom ~ {paste(grep('catF_1', predictors_int, value=T, invert=T), collapse=' + ')}"))
+form_ordinal <- bf(glue("NcatNum | thres(3) ~ {paste(predictors_int, collapse=' + ')}"))
+form_bern <- bf(glue("Nbloom ~ {paste(predictors_int, collapse=' + ')}"))
+form_bern_noCatF <- bf(glue("Nbloom ~ {paste(grep('catF_1', predictors_int, value=T, invert=T), collapse=' + ')}"))
 
 priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
             prior(normal(0, 1), class="Intercept"))
