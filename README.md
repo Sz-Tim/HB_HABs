@@ -60,3 +60,24 @@ This involves the following steps:
   2. Calculate ensemble predictions
   3. Clean and summarise
   4. Export to csv, map, etc 
+
+
+# Models
+We compare several Hierarchical Bayesian and Machine Learning models, as well as different methods for generating ensemble predictions.
+
+  - **HB~ord~**: Cumulative ordinal with traffic light warning categories, post-hoc aggregated to bloom states based on regulatory thresholds  
+  - **HB~2lgs~**: Dual logistic model predicting bloom state, split to submodels by Bloom~t-1~  
+  - **ML~RF~**: Random forest for bloom state  
+  - **ML~2RF~**: Random forest for bloom state, split to submodels by Bloom~t-1~  
+  - **EN~avg~**: Ensemble using a simple average of predictions from all models
+  - **EN~mo~**: Ensemble using LL ratios as model weights, averaging by month  
+  - **EN~xy~**: Ensemble using LL ratios as model weights, averaging by site  
+  - **EN~xy-mo**: Ensemble using LL ratios as model weights, averaging by site-month  
+  - **EN-d~avg~**: Dynamically updated version of **EN~avg~**  
+  - **EN-d~mo~**: Dynamically updated version of **EN~mo~**  
+  - **EN-d~xy~**: Dynamically updated version of **EN~xy~**  
+  - **EN-d~xy-mo~**: Dynamically updated version of **EN~xy-mo~**  
+  
+Static ensembles models weight based on the initial model fits only, maintaining those weights for all predictions. Dynamic ensemble models recalculate weights with each new set of predictions.  
+
+I don't know if it's possible to generate a pseudo-posterior distribution for RF models, given the mean prediction and an error... If so, ensembles could be fully Bayesian, including uncertainty. 
