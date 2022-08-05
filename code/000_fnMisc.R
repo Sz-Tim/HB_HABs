@@ -74,3 +74,17 @@ SomersDelta <- function(x,  y = NULL, direction=c("row","column"), conf.level = 
   return(result)
   
 }
+
+
+# copied from WeStCOMS
+function (data, ..., n = 10) 
+{
+  library(rlang)
+  variable <- enquos(...)
+  indices <- seq_len(n)
+  combos <- crossing(indices, var = as.list(variable))
+  quosures <- map2(combos$indices, combos$var, ~quo(lag(!!.y, 
+                                                        !!.x))) %>% set_names(paste(map_chr(combos$var, quo_text), 
+                                                                                    combos$indices, sep = "_"))
+  mutate(data, !!!quosures)
+}
