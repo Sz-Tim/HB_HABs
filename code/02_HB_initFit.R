@@ -10,7 +10,7 @@
 # set up ------------------------------------------------------------------
 
 pkgs <- c("tidyverse", "lubridate", "glue", "LaplacesDemon", "brms", 
-          "bayesplot", "WeStCOMS", "randomForest", "caret")
+          "randomForest", "caret")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "000_fn", full.names=T), source)
