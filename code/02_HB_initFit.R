@@ -235,14 +235,14 @@ for(sp in 1:length(species)) {
   test.df <- target.df %>% filter(year > 2017)
   
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
-                       family=cumulative("probit"),
+                       family=cumulative("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, prior=priors, chains=chains, cores=chains,
+                       control=ctrl, chains=chains, cores=chains,
                        file=glue("out{sep}test_full{sep}ord_{target}"))
   out.sord[[sp]] <- brm(s_form_ord, data=train.df, 
                         family=cumulative("probit"), prior=s_priors, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, prior=priors, chains=chains, cores=chains,
+                        control=ctrl, chains=chains, cores=chains,
                         file=glue("out{sep}test_full{sep}sord_{target}"))
   if(n_distinct(filter(train.df, N.bloom_1==0)$N.catF_1)==1) {
     form_01 <- form_bern_noCatF
@@ -250,24 +250,24 @@ for(sp in 1:length(species)) {
     form_01 <- form_bern
   }
   out.bern01[[sp]] <- brm(form_01, data=train.df %>% filter(Nbloom1==0),
-                          family=bernoulli("probit"), 
+                          family=bernoulli("probit"), prior=priors, 
                           iter=iter, warmup=warmup, refresh=refresh, init=0,
-                          control=ctrl, prior=priors, chains=chains, cores=chains,
+                          control=ctrl, chains=chains, cores=chains,
                           file=glue("out{sep}test_full{sep}bern01_{target}"))
   out.bern11[[sp]] <- brm(form_bern, data=train.df %>% filter(Nbloom1==1),
-                          family=bernoulli("probit"), 
+                          family=bernoulli("probit"), prior=priors, 
                           iter=iter, warmup=warmup, refresh=refresh, init=0,
-                          control=ctrl, prior=priors, chains=chains, cores=chains,
+                          control=ctrl, chains=chains, cores=chains,
                           file=glue("out{sep}test_full{sep}bern11_{target}"))
   out.sbern01[[sp]] <- brm(s_form_bern, data=train.df %>% filter(Nbloom1==0), 
                            family=bernoulli("probit"), prior=s_priors, 
                            iter=iter, warmup=warmup, refresh=refresh, init=0,
-                           control=ctrl, prior=priors, chains=chains, cores=chains,
+                           control=ctrl, chains=chains, cores=chains,
                            file=glue("out{sep}test_full{sep}sbern01_{target}"))
   out.sbern11[[sp]] <- brm(s_form_bern, data=train.df %>% filter(Nbloom1==1), 
                            family=bernoulli("probit"), prior=s_priors, 
                            iter=iter, warmup=warmup, refresh=refresh, init=0,
-                           control=ctrl, prior=priors, chains=chains, cores=chains,
+                           control=ctrl, chains=chains, cores=chains,
                            file=glue("out{sep}test_full{sep}sbern11_{target}"))
   
   # RF
