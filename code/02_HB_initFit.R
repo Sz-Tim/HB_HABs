@@ -357,7 +357,7 @@ for(sp in 1:length(species)) {
   pred.sbern11 <- posterior_epred(out.sbern11[[sp]], 
                                  newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
                                  allow_new_levels=T) 
-  pred.11 <- test.df %>% filter(Nbloom1==1) %>% select(obs.id) %>%
+  pred.11 <- test.df %>% filter(Nbloom1==1) %>% select(obsid) %>%
     mutate(bern_mnpr=colMeans(pred.bern11),
            sbern_mnpr=colMeans(pred.sbern11))
   pred.split <- bind_rows(pred.01, pred.11) %>%
