@@ -274,7 +274,7 @@ for(sp in 1:length(species)) {
            Nln1, Ncat1, 
            Nln2, Ncat2, 
            NlnWt1, NlnWt2, 
-           one_of(covars)) %>%
+           one_of(str_remove_all(covars, "\\.|_"))) %>%
     mutate(Nbloom=factor(Nbloom)) %>%
     as.data.frame()
   test.rf <- test.df %>%
@@ -284,7 +284,7 @@ for(sp in 1:length(species)) {
            Nln1, Ncat1, 
            Nln2, Ncat2, 
            NlnWt1, NlnWt2, 
-           one_of(covars)) %>%
+           one_of(str_remove_all(covars, "\\.|_"))) %>%
     mutate(Nbloom=factor(Nbloom)) %>%
     as.data.frame()
   train.rf01 <- train.rf %>% filter(Nbloom1==0)
