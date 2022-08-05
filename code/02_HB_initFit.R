@@ -244,7 +244,7 @@ for(sp in 1:length(species)) {
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
                         file=glue("out{sep}test_full{sep}sord_{target}"))
-  if(n_distinct(filter(train.df, N.bloom_1==0)$N.catF_1)==1) {
+  if(n_distinct(filter(train.df, Nbloom1==0)$NcatF1)==1) {
     form_01 <- form_bern_noCatF
   } else {
     form_01 <- form_bern
