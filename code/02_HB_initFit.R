@@ -100,7 +100,7 @@ predictors_int <- c(
   "water_R_wk:waterDir_R_wk:ydayCos:ydaySin",
   "wind_L_wk:windDir_L_wk:ydayCos:ydaySin",
   
-  "fetch", 
+  "fetch:ydayCos:ydaySin", 
   "influx_wk:ydayCos:ydaySin",
   
   "attn_wk:ydayCos:ydaySin",
