@@ -77,7 +77,7 @@ SomersDelta <- function(x,  y = NULL, direction=c("row","column"), conf.level = 
 
 
 # copied from WeStCOMS
-function (data, ..., n = 10) 
+multijetlag <- function (data, ..., n = 10) 
 {
   library(rlang)
   variable <- enquos(...)
