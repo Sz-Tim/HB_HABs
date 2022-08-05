@@ -208,4 +208,8 @@ varImpPlot(rf,
            main = "Top 10 - Variable Importance")
 importance(rf)
 
-partialPlot(rf, train.df, temp_L_wk, "1")
+partialPlot(rf, train.rf, short_wave_L_wk, "1")
+partialPlot(rf, train.rf, o2_wk, "1")
+partialPlot(rf, train.rf, wind_L_wk, "1")
+partialPlot(rf, train.rf, attn_wk, "1")
+partialPlot(rf, train.rf, po4_wk, "1")
