@@ -91,55 +91,89 @@ covars <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
 predictors_int <- c(
   "ydayCos", "ydaySin", 
   
-  "temp_L_wk:ydayCos:ydaySin",
-  "salinity_L_wk:ydayCos:ydaySin",
-  "short_wave_L_wk:ydayCos:ydaySin",
-  "km_L_wk:ydayCos:ydaySin",
-  "precip_L_wk:ydayCos:ydaySin",
-  "water_L_wk:waterDir_L_wk:ydayCos:ydaySin",
-  "water_R_wk:waterDir_R_wk:ydayCos:ydaySin",
-  "wind_L_wk:windDir_L_wk:ydayCos:ydaySin",
+  "tempLwk:ydayCos:ydaySin",
+  "salinityLwk:ydayCos:ydaySin",
+  "shortwaveLwk:ydayCos:ydaySin",
+  "kmLwk:ydayCos:ydaySin",
+  "precipLwk:ydayCos:ydaySin",
+  "waterLwk:waterDirLwk:ydayCos:ydaySin",
+  "waterRwk:waterDirRwk:ydayCos:ydaySin",
+  "windLwk:windDirLwk:ydayCos:ydaySin",
   
   "fetch:ydayCos:ydaySin", 
-  "influx_wk:ydayCos:ydaySin",
+  "influxwk:ydayCos:ydaySin",
   
-  "attn_wk:ydayCos:ydaySin",
-  "chl_wk:ydayCos:ydaySin",
-  "dino_wk:ydayCos:ydaySin",
-  "o2_wk:ydayCos:ydaySin",
-  "ph_wk:ydayCos:ydaySin",
-  "po4_wk:ydayCos:ydaySin",
+  "attnwk:ydayCos:ydaySin",
+  "chlwk:ydayCos:ydaySin",
+  "dinowk:ydayCos:ydaySin",
+  "o2wk:ydayCos:ydaySin",
+  "phwk:ydayCos:ydaySin",
+  "po4wk:ydayCos:ydaySin",
   
-  "mo(N.catF_1):ydayCos:ydaySin",
-  "mo(N.catF_2):ydayCos:ydaySin",
+  "mo(NcatF1):ydayCos:ydaySin",
+  "mo(NcatF2):ydayCos:ydaySin",
   
-  "N.lnWt_1:ydayCos:ydaySin",
-  "N.lnWt_2:ydayCos:ydaySin", 
+  "NlnWt1:ydayCos:ydaySin",
+  "NlnWt2:ydayCos:ydaySin", 
   
-  "mo(N.catF_1):mo(N.catF_2)",
+  "mo(NcatF1):mo(NcatF2)",
   
-  "wind_L_wk:windDir_L_wk:fetch",
-  "water_L_wk:waterDir_L_wk:fetch",
-  "water_R_wk:waterDir_R_wk:fetch",
+  "windLwk:windDirLwk:fetch",
+  "waterLwk:waterDirLwk:fetch",
+  "waterRwk:waterDirRwk:fetch",
   
-  "(1|site.id)"
+  "(1|siteid)"
 )
 
+predictors_s <- c(
+  "tempLwk", "salinityLwk", "shortwaveLwk",
+  "windVel", "waterVelL", "waterVelR",
+  "influxwk", "fetch",
+  "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
+  "Nbloom1", "Nbloom2"
+)
+predictors_s <- c(
+  "tempLwk", "phwk", "Nbloom1", "Nbloom2"
+)
 
-
-# predictors_int <- "
-#   temp_L_wk * precip_L_wk * short_wave_L_wk * salinity_L_wk * ydayCos * ydaySin +
-#   water_L_wk * waterDir_L_wk * ydayCos * ydaySin * fetch +
-#   water_R_wk * waterDir_R_wk * ydayCos * ydaySin * fetch +
-#   wind_L_wk * windDir_L_wk * ydayCos * ydaySin * fetch +
-#   mo(N.catF_1) * mo(N.catF_2) * ydayCos * ydaySin +
-#   N.lnWt_1 * N.lnWt_2 * ydayCos * ydaySin +
-#   influx_wk * ydayCos * ydaySin +
-#   (1|site.id)"
+s_b <- glue("b{predictors_s}") 
+s_flist <- map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)")))
+s_form_ord <- bf(
+  glue("NcatNum | thres(3) ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
+       "{paste(s_b, predictors_s, sep='*', collapse='+')}"),
+  bydayC ~ 1 + (1|siteid),
+  bydayS ~ 1 + (1|siteid),
+  bydaySC ~ 1 + (1|siteid),
+  flist=s_flist,
+  nl=T)
+s_form_bern <- bf(
+  glue("Nbloom ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
+       "{paste(s_b, predictors_s, sep='*', collapse='+')}"),
+  bydayC ~ 1 + (1|siteid),
+  bydayS ~ 1 + (1|siteid),
+  bydaySC ~ 1 + (1|siteid),
+  flist=s_flist,
+  nl=T)
 
 form_ordinal <- bf(glue("N.catNum | thres(3) ~ {paste(predictors_int, collapse=' + ')}"))
 form_bern <- bf(glue("N.bloom ~ {paste(predictors_int, collapse=' + ')}"))
 form_bern_noCatF <- bf(glue("N.bloom ~ {paste(grep('catF_1', predictors_int, value=T, invert=T), collapse=' + ')}"))
+
+priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
+            prior(normal(0, 1), class="Intercept"))
+s_priors <- map(s_b, 
+                ~prior_string(prior="normal(0, 1)", nlpar=.x)) %>% 
+  do.call('c', .) %>%
+  c(., prior(normal(0, 1), nlpar="bydayC"), 
+    prior(normal(0, 1), nlpar="bydayS"),
+    prior(normal(0, 1), nlpar="bydaySC"))
+
+# Model details
+ctrl <- list(adapt_delta=0.95, max_treedepth=20)
+chains <- 4
+iter <- 100
+warmup <- iter/2
+refresh <- 100
 
 
 
@@ -147,7 +181,7 @@ form_bern_noCatF <- bf(glue("N.bloom ~ {paste(grep('catF_1', predictors_int, val
 
 # initial fit -------------------------------------------------------------
 
-out.noBloom <- out.bloom <- out.ord <- vector("list", length(species))
+out.bern01 <- out.bern11 <- out.sbern01 <- out.sbern11 <- out.ord <- vector("list", length(species))
 
 for(sp in 1:length(species)) {
   target <- species[sp]
@@ -188,76 +222,92 @@ for(sp in 1:length(species)) {
     filter(complete.cases(.)) %>%
     select(site.id, lon, lat, date, year, obs.id, fetch, bearing,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
-           one_of(covars))
+           one_of(covars)) %>%
+    rename_with(~str_remove_all(.x, "\\.|_")) %>%
+    mutate(ydaySC=ydaySin*ydayCos,
+           windVel=windLwk*windDirLwk,
+           waterVelL=waterLwk*waterDirLwk,
+           waterVelR=waterRwk*waterDirRwk)
   
   write_csv(target.df, glue("out{sep}test_full{sep}dataset_{target}.csv"))
   
   train.df <- target.df %>% filter(year <= 2017)
   test.df <- target.df %>% filter(year > 2017)
   
-  priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
-              prior(normal(0, 1), class="Intercept"))
-  ctrl <- list(adapt_delta=0.95, max_treedepth=20)
-  chains <- 4
-  
   out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                        family=cumulative("probit"),
-                       iter=2000, warmup=1000, refresh=100, init=0,
+                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, prior=priors, chains=chains, cores=chains,
                        file=glue("out{sep}test_full{sep}ord_{target}"))
+  out.sord[[sp]] <- brm(s_form_ord, data=train.df, 
+                        family=cumulative("probit"), prior=s_priors, 
+                        iter=iter, warmup=warmup, refresh=refresh, init=0,
+                        control=ctrl, prior=priors, chains=chains, cores=chains,
+                        file=glue("out{sep}test_full{sep}sord_{target}"))
   if(n_distinct(filter(train.df, N.bloom_1==0)$N.catF_1)==1) {
     form_01 <- form_bern_noCatF
   } else {
     form_01 <- form_bern
   }
-  out.noBloom[[sp]] <- brm(form_01, data=train.df %>% filter(N.bloom_1==0),
-                           family=bernoulli("probit"), 
-                           iter=2000, warmup=1000, refresh=100, init=0,
+  out.bern01[[sp]] <- brm(form_01, data=train.df %>% filter(Nbloom1==0),
+                          family=bernoulli("probit"), 
+                          iter=iter, warmup=warmup, refresh=refresh, init=0,
+                          control=ctrl, prior=priors, chains=chains, cores=chains,
+                          file=glue("out{sep}test_full{sep}bern01_{target}"))
+  out.bern11[[sp]] <- brm(form_bern, data=train.df %>% filter(Nbloom1==1),
+                          family=bernoulli("probit"), 
+                          iter=iter, warmup=warmup, refresh=refresh, init=0,
+                          control=ctrl, prior=priors, chains=chains, cores=chains,
+                          file=glue("out{sep}test_full{sep}bern11_{target}"))
+  out.sbern01[[sp]] <- brm(s_form_bern, data=train.df %>% filter(Nbloom1==0), 
+                           family=bernoulli("probit"), prior=s_priors, 
+                           iter=iter, warmup=warmup, refresh=refresh, init=0,
                            control=ctrl, prior=priors, chains=chains, cores=chains,
-                           file=glue("out{sep}test_full{sep}bern01_{target}"))
-  out.bloom[[sp]] <- brm(form_bern, data=train.df %>% filter(N.bloom_1==1),
-                         family=bernoulli("probit"), 
-                         iter=2000, warmup=1000, refresh=100, init=0,
-                         control=ctrl, prior=priors, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}bern11_{target}"))
+                           file=glue("out{sep}test_full{sep}sbern01_{target}"))
+  out.sbern11[[sp]] <- brm(s_form_bern, data=train.df %>% filter(Nbloom1==1), 
+                           family=bernoulli("probit"), prior=s_priors, 
+                           iter=iter, warmup=warmup, refresh=refresh, init=0,
+                           control=ctrl, prior=priors, chains=chains, cores=chains,
+                           file=glue("out{sep}test_full{sep}sbern11_{target}"))
   
+  # RF
   train.rf <- train.df %>%
-    select(N.bloom, N.bloom_1,
+    select(Nbloom, Nbloom1,
            lon, lat, 
            ydaySin, ydayCos, fetch,
-           N.ln_1, N.cat_1, 
-           N.ln_2, N.cat_2, 
-           N.lnWt_1, N.lnWt_2, 
+           Nln1, Ncat1, 
+           Nln2, Ncat2, 
+           NlnWt1, NlnWt2, 
            one_of(covars)) %>%
-    mutate(N.bloom=factor(N.bloom)) %>%
+    mutate(Nbloom=factor(Nbloom)) %>%
     as.data.frame()
   test.rf <- test.df %>%
-    select(N.bloom, N.bloom_1,
+    select(Nbloom, Nbloom1,
            lon, lat, 
            ydaySin, ydayCos, fetch,
-           N.ln_1, N.cat_1, 
-           N.ln_2, N.cat_2, 
-           N.lnWt_1, N.lnWt_2, 
+           Nln1, Ncat1, 
+           Nln2, Ncat2, 
+           NlnWt1, NlnWt2, 
            one_of(covars)) %>%
-    mutate(N.bloom=factor(N.bloom)) %>%
+    mutate(Nbloom=factor(Nbloom)) %>%
     as.data.frame()
-  train.rf01 <- train.rf %>% filter(N.bloom_1==0)
-  train.rf11 <- train.rf %>% filter(N.bloom_1==1)
-  test.rf01 <- test.rf %>% filter(N.bloom_1==0)
-  test.rf11 <- test.rf %>% filter(N.bloom_1==1)
-  rf <- randomForest(N.bloom ~ ., data=train.rf, 
+  train.rf01 <- train.rf %>% filter(Nbloom1==0)
+  train.rf11 <- train.rf %>% filter(Nbloom1==1)
+  test.rf01 <- test.rf %>% filter(Nbloom1==0)
+  test.rf11 <- test.rf %>% filter(Nbloom1==1)
+  rf <- randomForest(Nbloom ~ ., data=train.rf, 
                      xtest=test.rf[,-1], ytest=test.rf[,1], 
                      proximity=T, keep.forest=T)
   p.rf <- predict(rf, test.rf, type="prob")
   
-  rf.01 <- randomForest(N.bloom ~ ., 
+  rf.01 <- randomForest(Nbloom ~ ., 
                         data=train.rf01, 
                         xtest=test.rf01[,-1], 
                         ytest=test.rf01[,1], 
                         proximity=T, keep.forest=T)
   p.rf.01 <- predict(rf.01, test.rf01, type="prob")
   
-  rf.11 <- randomForest(N.bloom ~ ., 
+  rf.11 <- randomForest(Nbloom ~ ., 
                         data=train.rf11, 
                         xtest=test.rf11[,-1], 
                         ytest=test.rf11[,1], 
@@ -281,21 +331,44 @@ for(sp in 1:length(species)) {
            ord_mnCat=colMeans(cat.iter),
            ord_wtmnCat=ord_mnpr0 + 2*ord_mnpr1 + 3*ord_mnpr2 + 4*ord_mnpr3,
            rf_mnpr=p.rf[,2])
-  pred.bern01 <- posterior_epred(out.noBloom[[sp]], 
-                                 newdata=test.df %>% filter(N.bloom_1==0) %>% droplevels, 
+  pred.sord <- posterior_epred(out.sord[[sp]], 
+                              newdata=test.df, 
+                              allow_new_levels=T)
+  cat.iter <- apply(pred.sord, 1:2, which.max)
+  pred.df <- pred.df %>%
+    mutate(sord_mnpr0=c(colMeans(pred.sord[,,1,drop=F])),
+           sord_mnpr1=c(colMeans(pred.sord[,,2,drop=F])),
+           sord_mnpr2=c(colMeans(pred.sord[,,3,drop=F])),
+           sord_mnpr3=c(colMeans(pred.sord[,,4,drop=F])),
+           sord_prmax0=colMeans(cat.iter==1),
+           sord_prmax1=colMeans(cat.iter==2),
+           sord_prmax2=colMeans(cat.iter==3),
+           sord_prmax3=colMeans(cat.iter==4),
+           sord_mnCat=colMeans(cat.iter),
+           sord_wtmnCat=sord_mnpr0 + 2*sord_mnpr1 + 3*sord_mnpr2 + 4*sord_mnpr3)
+  pred.bern01 <- posterior_epred(out.bern01[[sp]], 
+                                 newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
                                  allow_new_levels=T) 
-  pred.01 <- test.df %>% filter(N.bloom_1==0) %>% select(obs.id) %>%
-    mutate(bern_mnpr=colMeans(pred.bern01))
-  pred.bern11 <- posterior_epred(out.bloom[[sp]], 
-                                 newdata=test.df %>% filter(N.bloom_1==1) %>% droplevels, 
+  pred.sbern01 <- posterior_epred(out.sbern01[[sp]], 
+                                 newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
+                                 allow_new_levels=T) 
+  pred.01 <- test.df %>% filter(Nbloom1==0) %>% select(obsid) %>%
+    mutate(bern_mnpr=colMeans(pred.bern01),
+           sbern_mnpr=colMeans(pred.sbern01))
+  pred.bern11 <- posterior_epred(out.bern11[[sp]], 
+                                 newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
+                                 allow_new_levels=T) 
+  pred.sbern11 <- posterior_epred(out.sbern11[[sp]], 
+                                 newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
                                  allow_new_levels=T) 
   pred.11 <- test.df %>% filter(N.bloom_1==1) %>% select(obs.id) %>%
-    mutate(bern_mnpr=colMeans(pred.bern11))
+    mutate(bern_mnpr=colMeans(pred.bern11),
+           sbern_mnpr=colMeans(pred.sbern11))
   pred.split <- bind_rows(pred.01, pred.11) %>%
     mutate(rf_split_mnpr=c(p.rf.01[,2], p.rf.11[,2]))
   pred.df <- full_join(pred.df, pred.split)
   
-  write_csv(pred.df, glue("out{sep}test_full{sep}pred_int_{target}.csv"))
+  write_csv(pred.df, glue("out{sep}test_full{sep}pred_{target}.csv"))
   
   cat("Finished", target, "\n")
 }
