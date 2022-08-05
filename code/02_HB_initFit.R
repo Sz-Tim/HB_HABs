@@ -221,12 +221,30 @@ for(sp in 1:length(species)) {
                          control=ctrl, prior=priors, chains=chains, cores=chains,
                          file=glue("out{sep}test_full{sep}bern11_{target}"))
   
+  train.rf <- train.df %>%
+    select(N.bloom, 
+           site.id, lon, lat, 
+           ydaySin, ydayCos, fetch,
+           N.ln_1, N.cat_1, 
+           N.ln_2, N.cat_2, 
+           N.lnWt_1, N.lnWt_2, 
+           one_of(covars)) %>%
+    mutate(N.bloom=factor(N.bloom)) %>%
+    as.data.frame()
+  test.rf <- test.df %>%
+    select(N.bloom, 
+           site.id, lon, lat, 
+           ydaySin, ydayCos, fetch,
+           N.ln_1, N.cat_1, 
+           N.ln_2, N.cat_2, 
+           N.lnWt_1, N.lnWt_2, 
+           one_of(covars)) %>%
+    mutate(N.bloom=factor(N.bloom)) %>%
+    as.data.frame()
   train.rf01 <- train.rf %>% filter(N.bloom_1==0)
   train.rf11 <- train.rf %>% filter(N.bloom_1==1)
   test.rf01 <- test.rf %>% filter(N.bloom_1==0)
   test.rf11 <- test.rf %>% filter(N.bloom_1==1)
-  train.rf <- train.rf
-  test.rf <- test.rf
   rf <- randomForest(N.bloom ~ ., data=train.rf, 
                      xtest=test.rf[,-1], ytest=test.rf[,1], 
                      proximity=T, keep.forest=T)
