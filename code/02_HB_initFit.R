@@ -134,10 +134,13 @@ predictors_s <- c(
 )
 
 s_b <- glue("b{predictors_s}") 
-s_flist <- map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)")))
+s_p <- glue("p{predictors_s}")
+s_flist <- c(
+  map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+  map(s_p, ~as.formula(paste0(.x, "~ 1"))))
 s_form_ord <- bf(
   glue("NcatNum | thres(3) ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
-       "{paste(s_b, predictors_s, sep='*', collapse='+')}"),
+       "{paste(s_p, s_b, predictors_s, sep='*', collapse='+')}"),
   bydayC ~ 1 + (1|siteid),
   bydayS ~ 1 + (1|siteid),
   bydaySC ~ 1 + (1|siteid),
@@ -145,7 +148,7 @@ s_form_ord <- bf(
   nl=T)
 s_form_bern <- bf(
   glue("Nbloom ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
-       "{paste(s_b, predictors_s, sep='*', collapse='+')}"),
+       "{paste(s_p, s_b, predictors_s, sep='*', collapse='+')}"),
   bydayC ~ 1 + (1|siteid),
   bydayS ~ 1 + (1|siteid),
   bydaySC ~ 1 + (1|siteid),
@@ -157,8 +160,11 @@ form_bern <- bf(glue("Nbloom ~ {paste(predictors_int, collapse=' + ')}"))
 form_bern_noCatF <- bf(glue("Nbloom ~ {paste(grep('catF1', predictors_int, value=T, invert=T), collapse=' + ')}"))
 
 priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"))
-s_priors <- map(s_b, 
-                ~prior_string(prior="normal(0, 1)", nlpar=.x)) %>% 
+
+s_priors <- map(predictors_s, 
+              ~c(prior_string("beta(0.1,1)", nlpar=paste0("p", .x), lb=0, ub=1),
+                 prior_string("normal(0,1)", class="b", nlpar=paste0("b", .x)),
+                 prior_string("normal(0,1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
   do.call('c', .) %>%
   c(., prior(normal(0, 1), nlpar="bydayC"), 
     prior(normal(0, 1), nlpar="bydayS"),
@@ -239,7 +245,7 @@ for(sp in 1:length(species)) {
                         family=cumulative("probit"), prior=s_priors, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}sord_{target}"))
+                        file=glue("out{sep}test_full{sep}sord_p_{target}"))
   if(n_distinct(filter(train.df, Nbloom1==0)$NcatF1)==1) {
     form_01 <- form_bern_noCatF
   } else {
@@ -259,12 +265,12 @@ for(sp in 1:length(species)) {
                            family=bernoulli("probit"), prior=s_priors, 
                            iter=iter, warmup=warmup, refresh=refresh, init=0,
                            control=ctrl, chains=chains, cores=chains,
-                           file=glue("out{sep}test_full{sep}sbern01_{target}"))
+                           file=glue("out{sep}test_full{sep}sbern01_p_{target}"))
   out.sbern11[[sp]] <- brm(s_form_bern, data=train.df %>% filter(Nbloom1==1), 
                            family=bernoulli("probit"), prior=s_priors, 
                            iter=iter, warmup=warmup, refresh=refresh, init=0,
                            control=ctrl, chains=chains, cores=chains,
-                           file=glue("out{sep}test_full{sep}sbern11_{target}"))
+                           file=glue("out{sep}test_full{sep}sbern11_p_{target}"))
   
   # RF
   train.rf <- train.df %>%
@@ -364,7 +370,7 @@ for(sp in 1:length(species)) {
     mutate(rf_split_mnpr=c(p.rf.01[,2], p.rf.11[,2]))
   pred.df <- full_join(pred.df, pred.split)
   
-  write_csv(pred.df, glue("out{sep}test_full{sep}pred_{target}.csv"))
+  write_csv(pred.df, glue("out{sep}test_full{sep}pred_p_{target}.csv"))
   
   cat("Finished", target, "\n")
 }
