@@ -40,7 +40,7 @@ calc_ord_mnpr <- function(pred.ord, bloomThresh) {
          pr1=c(colMeans(pred.ord[,,2,drop=F])),
          pr2=c(colMeans(pred.ord[,,3,drop=F])),
          pr3=c(colMeans(pred.ord[,,4,drop=F])),
-         obsid=pred.df$obsid) %>%
+         obsid=1:dim(pred.ord)[2]) %>%
     pivot_longer(1:4, names_to="ord_cat", values_to="ord_pr") %>%
     mutate(ord_cat=as.numeric(str_sub(ord_cat, -1L, -1L))) %>%
     filter(ord_cat >= bloomThresh) %>%

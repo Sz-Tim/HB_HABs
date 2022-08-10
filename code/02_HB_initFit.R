@@ -13,7 +13,7 @@ pkgs <- c("tidyverse", "lubridate", "glue", "LaplacesDemon", "brms",
           "randomForest", "caret")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
-walk(dir("code", "000_fn", full.names=T), source)
+walk(dir("code", "*00_fn", full.names=T), source)
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
