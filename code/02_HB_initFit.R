@@ -361,6 +361,7 @@ for(sp in 1:length(species)) {
            sbernLP_mnpr=c(colMeans(fit.sbernLP01), colMeans(fit.sbernLP11)),
            rf_split_mnpr=c(fit.rf.01[,2], fit.rf.11[,2]))
     )
+  write_csv(fit.df, glue("out{sep}test_full{sep}fit_{target}.csv"))
   
   # OOS predictions
   pred.ord <- posterior_epred(out.ord[[sp]], 
