@@ -269,7 +269,7 @@ for(sp in 1:length(species)) {
                          family=cumulative("probit"), prior=s_priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
                          control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}sord_lapplace_{target}"))
+                         file=glue("out{sep}test_full{sep}sord_laplace_{target}"))
   if(n_distinct(filter(train.df, Nbloom1==0)$NcatF1)==1) {
     form_01 <- form_bern_noCatF
   } else {
