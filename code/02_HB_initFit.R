@@ -201,7 +201,7 @@ refresh <- 50
 # initial fit -------------------------------------------------------------
 
 out.bern01 <- out.sbernP01 <- out.sbernLP01 <- vector("list", length(species))
-out.sbern01 <- out.sbernP11 <- out.sbernLP11 <- vector("list", length(species))
+out.bern11 <- out.sbernP11 <- out.sbernLP11 <- vector("list", length(species))
 out.ord <- out.sordP <- out.sordLP <- vector("list", length(species))
 
 for(sp in 1:length(species)) {
