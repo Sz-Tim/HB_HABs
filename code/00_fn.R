@@ -5,105 +5,6 @@
 ## -----------------------------------------------------------------------------
 
 
-get_os <- function() {
-  # https://www.r-bloggers.com/2015/06/identifying-the-os-from-r/
-  sysinf <- Sys.info()
-  if (!is.null(sysinf)){
-    os <- sysinf['sysname']
-    if (os == 'Darwin')
-      os <- "osx"
-  } else { ## mystery machine
-    os <- .Platform$OS.type
-    if (grepl("^darwin", R.version$os))
-      os <- "osx"
-    if (grepl("linux-gnu", R.version$os))
-      os <- "linux"
-  }
-  tolower(os)
-}
-
-
-setPartTrackDirs <- function(base.dir="./", 
-                             java.dir="/home/sa04ts/particle_tracking/") {
-  
-}
-
-setPartTrackProperties <- function(
-  destinationDirectory="out/",
-  datadir="/media/archiver/common/sa01da-work/WeStCOMS2/Archive/",
-  datadirPrefix="netcdf_",
-  datadirSuffix="",
-  datadir2="",
-  datadir2Prefix="",
-  datadir2Suffix="",
-  mesh1="/home/sa04ts/FVCOM_meshes/WeStCOMS2_mesh.nc",
-  mesh1Type="FVCOM",
-  mesh2="",
-  coordRef="OSGB1936",
-  location="minch",
-  minchVersion=2,
-  habitat="",
-  suffix="",
-  sitefile="large_elem_centroids_v2.dat",
-  sitefileEnd="fsa_sites_v2.dat",
-  verboseSetUp="true",
-  start_ymd=20190401,
-  end_ymd=20220601,
-  numberOfDays=0,
-  backwards="false",
-  checkOpenBoundaries="false",
-  readHydroVelocityOnly="false",
-  duplicateLastDay="true",
-  recordsPerFile1=25,
-  dt=3600,
-  verticalDynamics="true",
-  fixDepth="false",
-  maxDepth="",
-  parallelThreads=4,
-  restartParticles="",
-  restartParticlesCutoffDays=21,
-  releaseScenario=1,
-  nparts=1,
-  setStartDepth="true",
-  startDepth=1,
-  seasonalDensityPath="",
-  thresh=500,
-  endOnArrival="false",
-  rk4="true",
-  stepsPerStep=30,
-  diffusion="true",
-  variableDiffusion="true",
-  D_h=0.1,
-  D_hVert=0.001,
-  salinityThreshold=0,
-  mortalityRate=0,
-  salinityMort="false",
-  swimLightLevel="false",
-  vertSwimSpeedMean=0,
-  vertSwimSpeedStd=0,
-  sinkingRateMean=0,
-  sinkingRateStd=0,
-  viabletime=-1,
-  maxParticleAge=168,
-  viableDegreeDays=-1,
-  maxDegreeDays=-1,
-  recordPsteps="false",
-  splitPsteps="true",
-  pstepsInterval=168,
-  recordMovement="true",
-  recordElemActivity="false",
-  recordConnectivity="true",
-  connectivityInterval=24,
-  recordLocations="true",
-  recordArrivals="true"
-) {
-  args <- formals()
-  return(paste(names(args), args, sep="=", collapse="\n"))
-}
-
-
-
-
 clean_fsa <- function(x, v1_end) {
   x %>%
     as_tibble %>% 
@@ -132,3 +33,22 @@ clean_fsa <- function(x, v1_end) {
              as.numeric) %>%
     select(-geom, -easting, -northing, -tide, -datetime_collected, -depth)
 }
+
+
+calc_ord_mnpr <- function(pred.ord, bloomThresh) {
+  tibble(pr0=c(colMeans(pred.ord[,,1,drop=F])),
+         pr1=c(colMeans(pred.ord[,,2,drop=F])),
+         pr2=c(colMeans(pred.ord[,,3,drop=F])),
+         pr3=c(colMeans(pred.ord[,,4,drop=F])),
+         obsid=pred.df$obsid) %>%
+    pivot_longer(1:4, names_to="ord_cat", values_to="ord_pr") %>%
+    mutate(ord_cat=as.numeric(str_sub(ord_cat, -1L, -1L))) %>%
+    filter(ord_cat >= bloomThresh) %>%
+    group_by(obsid) %>%
+    summarise(ord_mnpr=sum(ord_pr),
+              across(everything(), ~last(.x))) %>%
+    select(ord_mnpr) %>% 
+    as_vector
+}
+
+
