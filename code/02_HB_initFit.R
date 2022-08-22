@@ -170,14 +170,14 @@ for(i in seq_along(covariate_sets)) {
     glue("NcatNum | thres(3) ~ 1*bIntercept",
          "{ifelse(length(s_yday)>0, '+', '')}",
          "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{ifelse(length(s_b)>0, '+', '')}",
          "{paste(s_b, covar_s, sep='*', collapse='+')}"),
     flist=s_flist.LP, nl=T)
   s_form_bern.LP <- bf(
     glue("Nbloom ~ 1*bIntercept",
          "{ifelse(length(s_yday)>0, '+', '')}",
          "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{ifelse(length(s_b)>0, '+', '')}",
          "{paste(s_b, covar_s, sep='*', collapse='+')}"),
     flist=s_flist.LP, nl=T)
   
@@ -192,14 +192,14 @@ for(i in seq_along(covariate_sets)) {
     glue("NcatNum | thres(3) ~ 1*bIntercept",
          "{ifelse(length(s_yday)>0, '+', '')}",
          "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{ifelse(length(s_b)>0, '+', '')}",
          "{paste(s_p, s_b, covar_s, sep='*', collapse='+')}"),
     flist=s_flist.p, nl=T)
   s_form_bern.p <- bf(
     glue("Nbloom ~ 1*bIntercept",
          "{ifelse(length(s_yday)>0, '+', '')}",
          "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{ifelse(length(s_b)>0, '+', '')}",
          "{paste(s_p, s_b, covar_s, sep='*', collapse='+')}"),
     flist=s_flist.p, nl=T)
   
