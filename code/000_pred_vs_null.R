@@ -12,124 +12,186 @@ theme_set(theme_bw())
 
 # testing simple idea of spatially varying effects
 species <- str_sub(dir("out/test_full", "dataset"), 9, -5)
-spPred.df <- vector("list", length(species))
-
-for(i in seq_along(species)) {
-  obs.df <- read_csv(glue("out/test_full/dataset_{species[i]}.csv")) %>%
-    select(site.id, date, N.bloom_1, N.bloom, lon, lat, ydaySin, ydayCos, temp_L_wk, influx_wk) %>%
-    mutate(tempDate=ydaySin*ydayCos*temp_L_wk,
-           Date=ydaySin*ydayCos,
-           influxDate=ydaySin*ydayCos*influx_wk) %>%
-    mutate(lon=lon/1e5,
-           lat=lat/1e5) # scale for the spline
-  fit.0x <- obs.df %>% filter(year(date)<2018) %>% filter(N.bloom_1==0)
-  fit.1x <- obs.df %>% filter(year(date)<2018) %>% filter(N.bloom_1==1)
-  pred.0x <- obs.df %>% filter(year(date)>2017) %>% filter(N.bloom_1==0)
-  pred.1x <- obs.df %>% filter(year(date)>2017) %>% filter(N.bloom_1==1)
-  
-  temp.f <- bf(N.bloom ~ 
-                 bDateS*ydaySin + 
-                 bDateC*ydayCos +
-                 bDate*Date +
-                 bInfluxDate*influx_wk + 
-                 bTempDate*temp_L_wk,
-               bDateS ~ 1 + (1|site.id),
-               bDateC ~ 1 + (1|site.id),
-               bDate ~ 1 + (1|site.id),
-               bInfluxDate ~ s(ydaySin, ydayCos) + (1|site.id),
-               bTempDate ~ s(ydaySin, ydayCos) + (1|site.id),
-               nl=T)
-  
-  temp.priors <- c(prior(normal(0, 1), class="b", nlpar="bDateS"),
-                   prior(normal(0, 1), class="b", nlpar="bDateC"),
-                   prior(normal(0, 1), class="b", nlpar="bDate"),
-                   prior(normal(0, 1), class="b", nlpar="bTempDate"),
-                   prior(normal(0, 1), class="b", nlpar="bInfluxDate"))
-  
-  out.0x <- brm(temp.f, family=bernoulli("probit"), data=fit.0x, 
-                iter=2000, init=0, cores=4, chains=4, 
-                file=glue("out/spatTest_{species[i]}_0x"))
-  out.1x <- brm(temp.f, family=bernoulli("probit"), data=fit.1x, 
-                iter=2000, init=0, cores=4, chains=4,
-                file=glue("out/spatTest_{species[i]}_1x"))
-  
-  spPred.df[[i]] <- bind_rows(
-    pred.0x %>%
-      mutate(sp_mnpr=colMeans(posterior_epred(out.0x, newdata=., allow_new_levels=T))),
-    pred.1x %>%
-      mutate(sp_mnpr=colMeans(posterior_epred(out.1x, newdata=., allow_new_levels=T)))) %>%
-    mutate(species=species[i])
-}
-
-spPred.df <- do.call('rbind', spPred.df)
-
-
-
-
-
-
-
-
 
 
 data.df <- dir("out/test_full", "dataset_.*csv", full.names=T) %>% 
   map_dfr(~read_csv(.x) %>%
             mutate(month=lubridate::month(date),
                    week=lubridate::week(date)) %>%
-            select(site.id, date, obs.id, month, week, date, N.bloom_1) %>%
+            select(siteid, date, obsid, month, week, date, Nbloom1) %>%
             mutate(species=str_remove(str_remove(.x, "out/test_full/dataset_"), ".csv"))) %>%
-  arrange(species, site.id, date) %>%
+  arrange(species, date, siteid) %>%
+  group_by(species) %>%
+  mutate(mean_mnpr=cummean(Nbloom1)) %>%
   group_by(species, month) %>%
-  mutate(mo_mnpr=cummean(N.bloom_1)) %>%
-  group_by(species, site.id, month) %>%
-  mutate(mo_xy_mnpr=cummean(N.bloom_1)) %>%
-  group_by(species, site.id) %>%
-  mutate(xy_mnpr=cummean(N.bloom_1)) %>%
+  mutate(mo_mnpr=cummean(Nbloom1)) %>%
+  group_by(species, siteid, month) %>%
+  mutate(mo_xy_mnpr=cummean(Nbloom1)) %>%
+  group_by(species, siteid) %>%
+  mutate(xy_mnpr=cummean(Nbloom1)) %>%
   ungroup
 
+# TODO: Calculate LL using cross-validated runs, k=nYears[fit
+]
+fit.df <- map_dfr(dir("out/test_full/", "^fit.*csv"), 
+              ~read_csv(glue("out/test_full/{.x}")) %>%
+                select(siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
+                select(-starts_with("sbern"), -starts_with("sord")) %>%
+                mutate(month=lubridate::month(date), 
+                       species=str_sub(.x, 5, -5)))
+LL.tot <- fit.df %>% 
+  group_by(species) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
+  ungroup
+LL.mo <- fit.df %>% 
+  group_by(species, month) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+  ungroup
+LL.st <- fit.df %>% 
+  group_by(species, siteid) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+  ungroup
+LL.B1 <- fit.df %>% 
+  group_by(species, Nbloom1) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+  ungroup
+LL.moB1 <- fit.df %>% 
+  group_by(species, month, Nbloom1) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+  ungroup
+LL.stB1 <- fit.df %>% 
+  group_by(species, siteid, Nbloom1) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+  ungroup
+LL.moSt <- fit.df %>% 
+  group_by(species, month, siteid) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+  ungroup
+LL.moStB1 <- fit.df %>% 
+  group_by(species, month, siteid, Nbloom1) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+  ungroup
 
-pred.df <- map_dfr(dir("out/test_full", "pred_.*csv"), ~read_csv(glue("out/test_full/{.x}")) %>%
-                     select(site.id, date, obs.id, N.bloom, N.catF, N.catNum, N.bloom_1,
-                            contains("_mnpr")) %>%
-                     mutate(species=str_remove(str_remove(.x, "pred_int_"), ".csv"),
-                            bloomThresh=max((!N.bloom)*N.catNum))) %>%
-  pivot_longer(starts_with("ord"), names_to="ord_cat", values_to="ord_pr") %>%
-  mutate(ord_cat=as.numeric(str_remove(ord_cat, "ord_mnpr"))) %>%
-  filter(ord_cat >= bloomThresh) %>%
-  group_by(species, obs.id) %>%
-  summarise(ord_mnpr=sum(ord_pr),
-            across(everything(), ~first(.x))) %>%
-  mutate(avg_mnpr=(bern_mnpr + ord_mnpr + rf_mnpr + rf_split_mnpr)/4,
-         bayes_mnpr=(bern_mnpr + ord_mnpr)/2,
-         ML_mnpr=(rf_mnpr+rf_split_mnpr)/2) %>%
-  ungroup %>%
-  left_join(., spPred.df %>% select(species, site.id, date, sp_mnpr)) %>%
-  mutate(month=lubridate::month(date)) %>%
-  select(species, obs.id, site.id, month, date, N.bloom, N.bloom_1, ends_with("_mnpr")) %>%
-  left_join(., data.df %>% select(species, obs.id, ends_with("_mnpr")), 
-            by=c("species", "obs.id")) %>%
+pred.df <- map_dfr(dir("out/test_full/", "^pred_.*csv"), 
+                  ~read_csv(glue("out/test_full/{.x}")) %>%
+                    select(siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
+                    mutate(month=lubridate::month(date), 
+                           species=str_sub(.x, 6, -5)))
+
+pred.ens <- pred.df %>% 
+  left_join(LL.tot) %>% rowwise() %>%
+  mutate(avg=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.mo) %>% rowwise() %>%
+  mutate(avgMo=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.st) %>% rowwise() %>%
+  mutate(avgSt=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.B1) %>% rowwise() %>%
+  mutate(avgB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.moB1) %>% rowwise() %>%
+  mutate(avgMoB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.stB1) %>% rowwise() %>%
+  mutate(avgStB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.moSt) %>% rowwise() %>%
+  mutate(avgMoSt=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>%
+  left_join(LL.moStB1) %>% rowwise() %>%
+  mutate(avgMoStB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt"))
+pred.df <- pred.ens %>% 
+  mutate(avgSt=if_else(is.na(avgSt), avg, avgSt),
+         avgStB1=if_else(is.na(avgStB1), avgB1, avgStB1),
+         avgMoSt=if_else(is.na(avgMoSt), avgMo, avgMoSt),
+         avgMoStB1=if_else(is.na(avgMoStB1), avgMoB1, avgMoStB1)) %>%
+  rename(avg_mnpr=avg, 
+         avgMo_mnpr=avgMo,
+         avgSt_mnpr=avgSt,
+         avgB1_mnpr=avgB1,
+         avgMoB1_mnpr=avgMoB1,
+         avgStB1_mnpr=avgStB1,
+         avgMoSt_mnpr=avgMoSt,
+         avgMoStB1_mnpr=avgMoStB1) %>%
+  group_by(species) %>%
+  left_join(., data.df %>% select(species, obsid, ends_with("_mnpr")),
+            by=c("species", "obsid")) %>%
   pivot_longer(ends_with("_mnpr"), names_to="model", values_to="pred") %>%
   mutate(model=str_remove(model, "_mnpr"),
-         siteNum=as.numeric(as.factor(site.id))) 
+         siteNum=as.numeric(as.factor(siteid))) %>%
+  mutate(modType=case_when(grepl("mo|xy|mean", model) ~ "Null",
+                           grepl("LP", model) ~ "Laplace",
+                           grepl("rf", model) ~ "RF",
+                           model %in% c("bern", "ord") ~ "intrct",
+                           model %in% c("sbernP", "sordP") ~ "indVar",
+                           grepl("avg", model) ~ "ens"))
+  
 
 
-mod_cols <- c(mo="black", xy="grey40", mo_xy="grey70",
-              avg="red2", sp="orange",
-              bayes="steelblue4", bern="dodgerblue3", ord="dodgerblue", 
-              ML="green4", rf="green3", rf_split="green")
+mod_cols <- c(mean="black", mo="grey40", xy="grey60", mo_xy="grey80",
+              bern="dodgerblue", sbernLP="dodgerblue", sbernP="dodgerblue",
+              ord="cadetblue", sordLP="cadetblue", sordP="cadetblue",
+              rf="green4", rf_split="green3",
+              avg="red", avgMoStB1="red3",
+              avgMo="purple", avgSt="purple3", avgB1="purple4",
+              avgMoB1="yellow", avgStB1="yellow3", avgMoSt="yellow4")
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  group_by(species, model) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
-  ggplot(aes(species, Brier, colour=model)) + 
-  geom_point(position=position_jitter(width=0.01)) + 
+  mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
+  group_by(species, model, modType) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  group_by(species) %>%
+  arrange(species, model) %>%
+  mutate(R2=1 - LL/first(LL)) %>%
+  ggplot(aes(model, R2, colour=model, group=model)) +
+  geom_point() +
+  facet_grid(species~.) + 
+  ylim(-0.1, NA) +
   scale_colour_manual(values=mod_cols) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
+pred.df %>% ungroup %>%
+  mutate(model=factor(model, levels=names(mod_cols))) %>%
+  mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
+  mutate(Bloom_1=if_else(Nbloom1==0, "from No Bloom", "from Bloom")) %>%
+  group_by(species, model, modType, Bloom_1) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  group_by(species, Bloom_1) %>%
+  arrange(species, model) %>%
+  mutate(R2=1 - LL/first(LL)) %>%
+  ggplot(aes(model, R2, colour=model, group=model, shape=Bloom_1)) +
+  geom_point() +
+  facet_grid(species~.) + 
+  ylim(-0.1, NA) +
+  scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(19,1)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
 
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
+  group_by(species, model, modType) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
+  ggplot(aes(modType, Brier, colour=model, shape=modType)) + 
+  geom_point(position=position_jitter(width=0.1), size=2) + 
+  scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(1,15,16,17,18,4,2)) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) +
+  facet_wrap(~species, scales="free_y")
+
+pred.df %>% ungroup %>%
+  mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   group_by(species) %>%
   arrange(species, model) %>%
   mutate(Improve=first(Brier)-Brier) %>%
@@ -143,7 +205,7 @@ pred.df %>% ungroup %>%
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   group_by(species) %>%
   arrange(species, model) %>%
   mutate(pctImprove=(first(Brier)-Brier)/first(Brier)*100) %>%
@@ -157,39 +219,68 @@ pred.df %>% ungroup %>%
 # McFaddens R2
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  mutate(pred=pmax(pmin(pred, 1-1e-5), 1e-5)) %>%
-  group_by(species, model) %>%
-  summarise(LL=sum(dbinom(N.bloom, 1, pred, log=T))) %>%
+  mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
+  group_by(species, model, modType) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
   group_by(species) %>%
   arrange(species, model) %>%
   mutate(R2=1 - LL/first(LL)) %>%
-  ggplot(aes(species, R2, colour=model)) + 
+  ggplot(aes(modType, R2, colour=model)) + 
   geom_hline(yintercept=0, colour="grey", size=0.25) +
   geom_point(position=position_jitter(width=0.05)) + 
   scale_colour_manual(values=mod_cols) +
   labs(x="", y="McFadden's R2\nrelative to site-monthly avg") +
   ylim(-0.1, NA) +
-  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) +
+  facet_wrap(~species)
+pred.df %>% ungroup %>%
+  mutate(model=factor(model, levels=names(mod_cols))) %>%
+  mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
+  group_by(species, model, modType) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  group_by(species) %>%
+  arrange(species, model) %>%
+  mutate(R2=1 - LL/first(LL)) %>%
+  ggplot(aes(model, R2, colour=model)) + 
+  geom_hline(yintercept=0, colour="grey", size=0.25) +
+  geom_point() + 
+  scale_colour_manual(values=mod_cols) +
+  labs(x="", y="McFadden's R2 relative to grand mean") +
+  ylim(-0.1, NA) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) +
+  facet_grid(species~.)
 
 # By Bloom_1
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  group_by(species, model, N.bloom_1, N.bloom) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
-  mutate(Bloom=if_else(N.bloom==0, "to No Bloom", "to Bloom"),
-         Bloom_1=if_else(N.bloom_1==0, "from No Bloom", "from Bloom")) %>%
-  ggplot(aes(species, Brier, colour=model)) + 
-  geom_point(position=position_jitter(width=0.01)) + 
+  group_by(species, model, modType, Nbloom1, Nbloom) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
+  mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom"),
+         Bloom_1=if_else(Nbloom1==0, "from No Bloom", "from Bloom")) %>%
+  ggplot(aes(species, Brier, colour=model, shape=modType)) + 
+  geom_point(position=position_jitter(width=0.1), size=2) + 
   scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(1,15,16,17,18,4,2)) +
   facet_grid(Bloom_1~Bloom) + 
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
+pred.df %>% ungroup %>%
+  mutate(model=factor(model, levels=names(mod_cols))) %>%
+  group_by(species, model, modType, Nbloom1) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
+  mutate(Bloom_1=if_else(Nbloom1==0, "from No Bloom", "from Bloom")) %>%
+  ggplot(aes(species, Brier, colour=model, shape=modType)) + 
+  geom_point(position=position_jitter(width=0.1), size=2) + 
+  scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(1,15,16,17,18,4,2)) +
+  facet_wrap(~Bloom_1) + 
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
 
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  group_by(species, model, N.bloom_1, N.bloom) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
-  mutate(Bloom=if_else(N.bloom==0, "to No Bloom", "to Bloom"),
-         Bloom_1=if_else(N.bloom_1==0, "from No Bloom", "from Bloom")) %>%
+  group_by(species, model, Nbloom1, Nbloom) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
+  mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom"),
+         Bloom_1=if_else(Nbloom1==0, "from No Bloom", "from Bloom")) %>%
   group_by(species, Bloom, Bloom_1) %>%
   arrange(species, model) %>%
   mutate(Improve=first(Brier)-Brier,
@@ -224,18 +315,57 @@ pred.df %>% ungroup %>%
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   mutate(pred=pmax(pmin(pred, 1-1e-5), 1e-5)) %>%
-  group_by(species, model, N.bloom_1, N.bloom) %>%
-  summarise(LL=sum(dbinom(N.bloom, 1, pred, log=T))) %>%
-  mutate(Bloom=if_else(N.bloom==0, "to No Bloom", "to Bloom"),
-         Bloom_1=if_else(N.bloom_1==0, "from No Bloom", "from Bloom")) %>%
+  group_by(species, model, modType, Nbloom1, Nbloom) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom"),
+         Bloom_1=if_else(Nbloom1==0, "from No Bloom", "from Bloom")) %>%
   group_by(species, Bloom, Bloom_1) %>%
   arrange(species, model) %>%
   mutate(R2=1 - LL/first(LL)) %>%
-  ggplot(aes(species, R2, colour=model)) + 
+  ggplot(aes(species, R2, colour=model, shape=modType)) + 
   geom_hline(yintercept=0, colour="grey", size=0.25) +
   geom_point(position=position_jitter(width=0.05)) + 
   scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(1,15,16,17,18,4,2)) +
   facet_grid(Bloom_1~Bloom, scales="free") + 
+  labs(x="", y="McFadden's R2 relative to site-monthly avg") +
+  ylim(-0.1, NA) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
+
+pred.df %>% ungroup %>%
+  mutate(model=factor(model, levels=names(mod_cols))) %>%
+  mutate(pred=pmax(pmin(pred, 1-1e-5), 1e-5)) %>%
+  group_by(species, model, modType, Nbloom1) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  mutate(Bloom_1=if_else(Nbloom1==0, "from No Bloom", "from Bloom")) %>%
+  group_by(species, Bloom_1) %>%
+  arrange(species, model) %>%
+  mutate(R2=1 - LL/first(LL)) %>%
+  ggplot(aes(species, R2, colour=model, shape=modType)) + 
+  geom_hline(yintercept=0, colour="grey", size=0.25) +
+  geom_point(position=position_jitter(width=0.1), size=2) + 
+  scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(1,15,16,17,18,4,2)) +
+  facet_grid(.~Bloom_1, scales="free") + 
+  labs(x="", y="McFadden's R2 relative to site-monthly avg") +
+  ylim(-0.1, NA) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
+
+pred.df %>% ungroup %>%
+  mutate(model=factor(model, levels=names(mod_cols))) %>%
+  mutate(pred=pmax(pmin(pred, 1-1e-5), 1e-5)) %>%
+  group_by(species, model, modType, Nbloom) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom")) %>%
+  group_by(species, Bloom) %>%
+  arrange(species, model) %>%
+  mutate(R2=1 - LL/first(LL)) %>%
+  ggplot(aes(species, R2, colour=model, shape=modType)) + 
+  geom_hline(yintercept=0, colour="grey", size=0.25) +
+  geom_point(position=position_jitter(width=0.05)) + 
+  scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(15,16,17,18,4,2)) +
+  facet_grid(.~Bloom, scales="free") + 
   labs(x="", y="McFadden's R2 relative to site-monthly avg") +
   ylim(-0.1, NA) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
@@ -245,7 +375,7 @@ pred.df %>% ungroup %>%
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model, siteNum) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   ggplot(aes(siteNum, Brier, colour=model)) + 
   geom_point(position=position_jitter(width=0.01)) + 
   scale_colour_manual(values=mod_cols) +
@@ -267,7 +397,7 @@ pred.df %>% ungroup %>%
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model, siteNum) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   group_by(species, siteNum) %>%
   arrange(species, model) %>%
   mutate(Improve=first(Brier)-Brier) %>%
@@ -334,16 +464,16 @@ pred.df %>% ungroup %>%
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model, month) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   ggplot(aes(month, Brier, colour=model)) + 
-  geom_line(position=position_jitter(width=0.01)) + 
+  geom_line() + 
   scale_colour_manual(values=mod_cols) +
   scale_x_continuous(breaks=seq(1,12,by=2), labels=month.abb[seq(1,12,by=2)]) +
   facet_wrap(~species, scales="free") 
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model, month) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   group_by(species, month) %>%
   arrange(species, model) %>%
   mutate(Improve=first(Brier)-Brier) %>%
@@ -357,7 +487,7 @@ pred.df %>% ungroup %>%
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model, month) %>%
-  summarise(Brier=mean((pred-N.bloom)^2, na.rm=T)) %>%
+  summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   group_by(species, month) %>%
   arrange(species, model) %>%
   mutate(Brier=Brier+0.01) %>%
@@ -510,21 +640,21 @@ pred.df %>%
 
 
 
-binary.ls <- pred.df %>% #filter(N.bloom_1==0) %>%
+binary.ls <- pred.df %>% filter(Nbloom1==0) %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  select(obs.id, species, N.bloom, model, pred) %>%
+  select(obsid, species, Nbloom, model, pred) %>%
   group_by(model) %>%
   group_split() %>%
   map(~.x %>% group_by(species) %>% group_split)
 names(binary.ls) <- names(mod_cols)
 
 roc.ls <- map_depth(binary.ls, 2,
-                    ~pROC::roc(.x$N.bloom ~ .x$pred))
+                    ~pROC::roc(.x$Nbloom ~ .x$pred))
 
 
 for(i in 1:5) {
   par(mfrow=c(1,1))
-  png(glue("figs/performance/ROC_{species[i]}.png"), width=5, height=5, res=300, units="in")
+  png(glue("figs/performance/0x_ROC_{species[i]}.png"), width=5, height=5, res=300, units="in")
   plot(NA, NA, xlim=c(0, 1), ylim=c(0, 1),
        xlab="1 - Specificity", ylab="Sensitivity", axes=F, main=species[i])
   axis(side=1, at=c(0, 0.5, 1))
@@ -535,27 +665,21 @@ for(i in 1:5) {
              col=mod_cols[.x], lwd=2.5))
   legend("bottomright",
          paste(names(mod_cols), map_dbl(roc.ls, ~round(.x[[i]]$auc, 2)),  sep=": "),
-         col=mod_cols, lty=1, lwd=2, bty="n", cex=0.95)
+         col=mod_cols, lty=1, lwd=2, bty="n", cex=0.6)
   dev.off()
 }
 
 auc.df <- map_depth(roc.ls, 2, ~.x$auc) %>% 
   map_dfc(~do.call(c, .x)) %>%
   mutate(species=species) %>%
-  pivot_longer(-species, names_to="model", values_to="AUC")
-write_csv(auc.df, glue("figs/performance/auc_all.csv"))
+  pivot_longer(-species, names_to="model", values_to="AUC") %>%
+  mutate(model=factor(model, levels=names(mod_cols)))
+write_csv(auc.df, glue("figs/performance/auc_0x.csv"))
 
-auc.df <- tibble(
-  bern=map(roc.ls[["bern"]], ~.x$auc) %>% do.call(c, .) %>% round(3),
-  ord=map(roc.ls[["ord"]], ~.x$auc) %>% do.call(c, .) %>% round(3),
-  rf=map(roc.ls[["rf"]], ~.x$auc) %>% do.call(c, .) %>% round(3),
-  rf_s=map(roc.ls[["rf_s"]], ~.x$auc) %>% do.call(c, .) %>% round(3),
-  avg=map(roc.ls[["avg"]], ~.x$auc) %>% do.call(c, .) %>% round(3)
-) %>%
-  mutate(species=species) %>%
-  pivot_longer(1:5, names_to="model", values_to="AUC")
-write_csv(auc.df, glue("figs{sep}performance{sep}auc_all.csv"))
-
+ggplot(auc.df, aes(model, AUC, colour=species, group=species)) + geom_line() + 
+  scale_colour_manual(values=sams.cols)
+ggplot(auc.df, aes(species, AUC, colour=model, group=model)) + geom_line() + 
+  scale_colour_manual(values=mod_cols)
 par(mfrow=c(1,1))
 
 
@@ -565,11 +689,13 @@ par(mfrow=c(1,1))
 auc.f <- dir(glue("figs{sep}performance{sep}"), "auc_.*csv", full.names=T)
 auc.df <- map_dfr(auc.f, ~read_csv(.x, show_col_types=F) %>%
                     mutate(type=str_split_fixed(.x, "auc_", 2)[,2])) %>%
-  mutate(data_subset=if_else(grepl("01", type), "01", "all"),
-         covars=if_else(grepl("dayOnly", type), "dayOnly", "full"))
-ggplot(auc.df, aes(model, AUC, colour=covars)) +
+  mutate(data_subset=if_else(grepl("0x", type), "0x", "all")) %>%
+  mutate(model=factor(model, levels=names(mod_cols)))
+ggplot(auc.df, aes(model, AUC, colour=model, group=model)) +
   geom_point() +
-  facet_grid(species~data_subset)
+  facet_grid(species~data_subset) + 
+  scale_colour_manual(values=mod_cols) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
 
 auc.df %>% select(-type) %>%
   pivot_wider(names_from="covars", values_from="AUC") %>%
@@ -600,3 +726,95 @@ ce.f <- map2(ord.f, ord.eff,
                                    effects=grep("Intercept", .y$var, invert=T, value=T),
                                    conditions=dateConditions))
 
+
+
+
+
+dateConditions <- tibble(yday=seq(1, 365, length.out=365)) %>%
+  mutate(ydayCos=cos(yday*2*pi/365),
+         ydaySin=sin(yday*2*pi/365))
+
+
+
+sams.cols <- c("alexandrium_sp"="#2A5883",
+               "dinophysis_sp"="#46BFDE",
+               "karenia_mikimotoi"="#A9DAE0",
+               "prorocentrum_lima"="#E77334",
+               "pseudo_nitzschia_sp"="#D21E4C")
+nlpars <- c('bydayC', 'bydayS', 'bydaySC', 'btempLwk', 'bshortwaveLwk', 
+            'bwindVel', 'binfluxwk', 'bfetch', 'bdinowk', 'bo2wk', 'bpo4wk', 
+            'bNbloom1', 'bNbloom2')
+out.alex <- readRDS("out/test_full/sord_laplace_alexandrium_sp.rds")
+data.alex <- read_csv("out/test_full/dataset_alexandrium_sp.csv")
+pred.alex <- map_dfr(nlpars, ~data.alex %>%
+                       mutate(slope=colMeans(posterior_epred(out.alex, newdata=., allow_new_levels=T, nlpar=.x)),
+                              var=.x))
+
+ggplot(pred.alex, aes(yday, slope)) + 
+  geom_hline(yintercept=0, colour="grey30") +
+  geom_point(alpha=0.5) + facet_wrap(~var)
+
+
+out.dino <- readRDS("out/test_full/sord_laplace_dinophysis_sp.rds")
+data.dino <- read_csv("out/test_full/dataset_dinophysis_sp.csv")
+pred.dino <- map_dfr(nlpars, ~data.dino %>%
+                       mutate(slope=colMeans(posterior_epred(out.dino, newdata=., allow_new_levels=T, nlpar=.x)),
+                              var=.x))
+
+ggplot(pred.dino, aes(yday, slope)) + 
+  geom_hline(yintercept=0, colour="grey30") +
+  geom_point(alpha=0.5) + facet_wrap(~var)
+
+pred.da <- bind_rows(pred.alex %>% mutate(species="alexandrium_sp"),
+                     pred.dino %>% mutate(species="dinophysis_sp"))
+ggplot(pred.da, aes(yday, slope, colour=species)) + 
+  geom_hline(yintercept=0, colour="grey30") +
+  geom_point(alpha=0.5, shape=1, size=0.7) + facet_wrap(~var) +
+  scale_colour_manual(values=sams.cols) +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1)))
+
+
+
+out.p <- dir("out/test_full", "sord_p_", full.names=T) %>%
+  map(readRDS) %>% setNames(species)
+p.effects <- c('tempLwk', 'salinityLwk', 
+               'shortwaveLwk', 'windVel', 'waterVelL', 'waterVelR', 'influxwk', 
+               'fetch', 'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
+               'Nbloom1', 'Nbloom2')
+p.nonZero <- map(out.p, ~fixef(.x) %>% 
+                   as_tibble(rownames="var") %>%
+                   filter(grepl("^p", var)) %>%
+                   filter(Q2.5 > 0.01))
+library(bayesplot)
+imap(out.p, ~mcmc_intervals(.x, regex_pars="^b_p.*Intercept") + ggtitle(.y))
+
+data.alex <- read_csv("out/test_full/dataset_alexandrium_sp.csv")
+
+smooths.df <- bind_cols(expand_grid(yday=seq(1, 365, length.out=52),
+                                    siteid=unique(data.alex$siteid)) %>%
+                          mutate(ydayCos=cos(yday*2*pi/365),
+                                 ydaySin=sin(yday*2*pi/365),
+                                 ydaySC=ydayCos*ydaySin),
+                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
+                          pivot_wider(names_from="var", values_from="val"))
+pred.ls <- vector("list", length(species)) %>% setNames(species)
+for(i in seq_along(pred.ls)) {
+  pred.ls[[i]] <- map_dfr(p.effects, 
+                          ~smooths.df %>%
+                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                  allow_new_levels=T,
+                                                                  nlpar=paste0("b", .x))),
+                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                              allow_new_levels=T,
+                                                              nlpar=paste0("p", .x))),
+                                   var=.x,
+                                   species=species[i]))
+}
+pred.smooths <- do.call(rbind, pred.ls)
+ggplot(pred.smooths, aes(yday, slope*p, colour=species, group=paste(species, siteid))) + 
+  geom_hline(yintercept=0, colour="grey30", linetype=2) +
+  geom_line(alpha=0.25) + facet_wrap(~var) +
+  # scale_colour_manual(values=sams.cols) +
+  scale_colour_brewer(type="qual", palette=2) +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid=element_blank())
