@@ -220,7 +220,7 @@ for(i in seq_along(covariate_sets)) {
     map(covar_s, 
         ~c(prior_string("beta(0.1,1)", nlpar=paste0("p", .x), lb=0, ub=1),
            prior_string("normal(0,1)", class="b", nlpar=paste0("b", .x)),
-           prior_string("normal(0,1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
+           prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
       do.call('c', .),
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
       do.call('c', .)
