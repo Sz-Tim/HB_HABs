@@ -15,6 +15,13 @@ suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
+# Model details
+ctrl <- list(adapt_delta=0.95, max_treedepth=20)
+chains <- 4
+iter <- 2000
+warmup <- iter/2
+refresh <- 50
+
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
 if(.Platform$OS.type=="unix") {
@@ -80,338 +87,360 @@ cprn.df <- read_csv("data/copernicus_westcoms1.csv") %>%
 # >0.85 cor(res) = short_wave, km, precip, wind, windDir
 # >0.85 cor(time) = water
 # waterDir is more variable across all 4
-covars <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
+covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
             "precip_L_wk", 
             "wind_L_wk", "windDir_L_wk",
             "water_L_wk", "waterDir_L_wk", 
             "water_R_wk", "waterDir_R_wk",
             "influx_wk", 
             "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk")
-
-predictors_int <- c(
-  "ydayCos", "ydaySin", 
-  
-  "tempLwk:ydayCos:ydaySin",
-  "salinityLwk:ydayCos:ydaySin",
-  "shortwaveLwk:ydayCos:ydaySin",
-  "kmLwk:ydayCos:ydaySin",
-  "precipLwk:ydayCos:ydaySin",
-  "waterLwk:waterDirLwk:ydayCos:ydaySin",
-  "waterRwk:waterDirRwk:ydayCos:ydaySin",
-  "windLwk:windDirLwk:ydayCos:ydaySin",
-  
-  "fetch:ydayCos:ydaySin", 
-  "influxwk:ydayCos:ydaySin",
-  
-  "attnwk:ydayCos:ydaySin",
-  "chlwk:ydayCos:ydaySin",
-  "dinowk:ydayCos:ydaySin",
-  "o2wk:ydayCos:ydaySin",
-  "phwk:ydayCos:ydaySin",
-  "po4wk:ydayCos:ydaySin",
-  
-  "mo(NcatF1):ydayCos:ydaySin",
-  "mo(NcatF2):ydayCos:ydaySin",
-  
-  "NlnWt1:ydayCos:ydaySin",
-  "NlnWt2:ydayCos:ydaySin", 
-  
+covar_int.all <- c(
+  "ydayCos", "ydaySin",
+  paste0(c("tempLwk", "salinityLwk", "shortwaveLwk",
+           "windVel", "waterVelL", "waterVelR",
+           "influxwk", "fetch",
+           "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
+           "mo(NcatF1)", "mo(NcatF2)",
+           "NlnWt1", "NlnWt2"), 
+         ":ydayCos:ydaySin"),
   "mo(NcatF1):mo(NcatF2)",
-  
-  "windLwk:windDirLwk:fetch",
-  "waterLwk:waterDirLwk:fetch",
-  "waterRwk:waterDirRwk:fetch",
-  
-  "(1|siteid)"
+  paste0(c("windVel", "waterVelL", "waterVelR"), 
+         ":fetch")
 )
-
-predictors_s <- c(
+covar_s.all <- c(
   "tempLwk", "salinityLwk", "shortwaveLwk",
   "windVel", "waterVelL", "waterVelR",
   "influxwk", "fetch",
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
-  "Nbloom1", "Nbloom2"
+  "Nbloom1", "Nbloom2",
+  "NlnWt1", "NlnWt2"
 )
 
-s_b <- glue("b{predictors_s}") 
 
-# Laplace priors only
-s_flist.LP <- map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)")))
-s_form_ord.LP <- bf(
-  glue("NcatNum | thres(3) ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
-       "{paste(s_b, predictors_s, sep='*', collapse='+')}"),
-  bydayC ~ 1 + (1|siteid), bydayS ~ 1 + (1|siteid), bydaySC ~ 1 + (1|siteid),
-  flist=s_flist.LP, nl=T)
-s_form_bern.LP <- bf(
-  glue("Nbloom ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
-       "{paste(s_b, predictors_s, sep='*', collapse='+')}"),
-  bydayC ~ 1 + (1|siteid), bydayS ~ 1 + (1|siteid), bydaySC ~ 1 + (1|siteid),
-  flist=s_flist.LP, nl=T)
-
-# Indicator variable: p * b * X
-s_p <- glue("p{predictors_s}")
-s_flist.p <- c(
-  map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
-  map(s_p, ~as.formula(paste0(.x, "~ 1"))))
-s_form_ord.p <- bf(
-  glue("NcatNum | thres(3) ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
-       "{paste(s_p, s_b, predictors_s, sep='*', collapse='+')}"),
-  bydayC ~ 1 + (1|siteid), bydayS ~ 1 + (1|siteid), bydaySC ~ 1 + (1|siteid),
-  flist=s_flist.p, nl=T)
-s_form_bern.p <- bf(
-  glue("Nbloom ~ bydayC*ydayCos + bydayS*ydaySin + bydaySC*ydaySC +",
-       "{paste(s_p, s_b, predictors_s, sep='*', collapse='+')}"),
-  bydayC ~ 1 + (1|siteid), bydayS ~ 1 + (1|siteid), bydaySC ~ 1 + (1|siteid),
-  flist=s_flist.p, nl=T)
-
-# Interaction
-form_ordinal <- bf(glue("NcatNum | thres(3) ~ {paste(predictors_int, collapse=' + ')}"))
-form_bern <- bf(glue("Nbloom ~ {paste(predictors_int, collapse=' + ')}"))
-form_bern_noCatF <- bf(glue("Nbloom ~ {paste(grep('catF1', predictors_int, value=T, invert=T), collapse=' + ')}"))
-
-# Priors
-priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"))
-s_priors.LP <- map(predictors_s, 
-                  ~c(prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x)),
-                     prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
-  do.call('c', .) %>%
-  c(., prior(normal(0, 1), nlpar="bydayC"), 
-    prior(normal(0, 1), nlpar="bydayS"),
-    prior(normal(0, 1), nlpar="bydaySC"))
-s_priors.p <- map(predictors_s, 
-                  ~c(prior_string("beta(0.1,1)", nlpar=paste0("p", .x), lb=0, ub=1),
-                     prior_string("normal(0,1)", class="b", nlpar=paste0("b", .x)),
-                     prior_string("normal(0,1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
-  do.call('c', .) %>%
-  c(., prior(normal(0, 1), nlpar="bydayC"), 
-    prior(normal(0, 1), nlpar="bydayS"),
-    prior(normal(0, 1), nlpar="bydaySC"))
-
-# Model details
-ctrl <- list(adapt_delta=0.95, max_treedepth=20)
-chains <- 4
-iter <- 2000
-warmup <- iter/2
-refresh <- 50
+covariate_sets <- list(
+  date="^yday",
+  autoreg="^N|mo",
+  external="fetch|influx|water|wind",
+  local="temp|salinity|shortwave",
+  cprn="attn|chl|dino|o2|ph|po4",
+  all=".",
+  null="NA"
+)
 
 
-
-
-
-# initial fit -------------------------------------------------------------
-
-out.bern01 <- out.sbernP01 <- out.sbernLP01 <- vector("list", length(species))
-out.bern11 <- out.sbernP11 <- out.sbernLP11 <- vector("list", length(species))
-out.ord <- out.sordP <- out.sordLP <- vector("list", length(species))
-
-for(sp in 1:length(species)) {
-  target <- species[sp]
-  target.tf <- thresh.df %>% filter(hab_parameter==target)
+for(i in seq_along(covariate_sets)) {
+  i.name <- names(covariate_sets)[i]
+  i.covs <- covariate_sets[[i]]
+  covars <- covars.all[grepl(i.covs, str_remove_all(covars.all, "\\.|_"))]
+  covar_int <- grep(i.covs, covar_int.all, value=T)
+  covar_s <- grep(i.covs, covar_s.all, value=T)
+  covar_date <- grep(i.covs, c("ydayCos", "ydaySin"), value=T)
+  # Interaction
+  form_ordinal <- bf(glue("NcatNum | thres(3) ~ 1 + ", 
+                          "{paste(covar_int, collapse='+')}", 
+                          "{ifelse(length(covar_int) > 0, '+', '')}",
+                          "(1",
+                          "{ifelse(length(covar_int) > 0, '+', '')}",
+                          "{paste(covar_int, collapse='+')}|siteid)"))
+  form_bern <- bf(glue("Nbloom ~ 1 + ", 
+                       "{paste(covar_int, collapse='+')}", 
+                       "{ifelse(length(covar_int) > 0, '+', '')}",
+                       "(1",
+                       "{ifelse(length(covar_int) > 0, '+', '')}",
+                       "{paste(covar_int, collapse='+')}|siteid)"))
+  form_bern_noCatF <- bf(glue("Nbloom ~ 1 + ", 
+                       "{paste(grep('catF1', covar_int, value=T, invert=T), collapse='+')}", 
+                       "{ifelse(length(grep('catF1', covar_int, value=T, invert=T)) > 0, '+', '')}",
+                       "(1",
+                       "{ifelse(length(grep('catF1', covar_int, value=T, invert=T)) > 0, '+', '')}",
+                       "{paste(grep('catF1', covar_int, value=T, invert=T), collapse='+')}|siteid)"))
   
-  target.df <- sampling.df %>%
-    filter(grid==1) %>% 
-    rename(N=!!target) %>%
-    select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
-    mutate(yday=yday(date),
-           ydayCos=cos(2*pi*yday/365),
-           ydaySin=sin(2*pi*yday/365),
-           year=year(date),
-           bearing=bearing*pi/180,
-           N=round(N),
-           N.ln=log(N+1)) %>%
-    rowwise() %>%
-    mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
-    ungroup %>%
-    mutate(N.catF=factor(N.cat, levels=unique(target.tf$tl), ordered=T),
-           N.catNum=as.numeric(N.catF),
-           N.bloom=target.tf$bloom[match(N.cat, target.tf$tl)]) %>%
-    arrange(site.id, date) %>%
-    group_by(site.id) %>%
-    multijetlag(N.ln, N.cat, N.catF, N.bloom, date, n=2) %>%
-    ungroup %>%
-    mutate(across(starts_with("date_"), ~as.numeric(date-.x)),
-           # I don't love this since small if N.ln_x is small OR date_x is large
-           N.lnWt_1=N.ln_1/date_1,
-           N.lnWt_2=N.ln_2/date_2) %>%
-    full_join(hydro.df) %>%
-    full_join(connect.df) %>%
-    full_join(cprn.df) %>%
-    mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>%
-    mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
-    arrange(site.id, date) %>%
-    filter(complete.cases(.)) %>%
-    select(site.id, lon, lat, date, year, obs.id, fetch, bearing,
-           starts_with("N"), starts_with("date_"), starts_with("yday"),
-           one_of(covars)) %>%
-    rename_with(~str_remove_all(.x, "\\.|_")) %>%
-    mutate(ydaySC=ydaySin*ydayCos,
-           windVel=windLwk*windDirLwk,
-           waterVelL=waterLwk*waterDirLwk,
-           waterVelR=waterRwk*waterDirRwk)
+  # Smoothers
+  s_b <- glue("b{covar_s}") 
+  s_yday <- glue("b{covar_date}")
+  s_p <- glue("p{covar_s}")
   
-  write_csv(target.df, glue("out{sep}test_full{sep}dataset_{target}.csv"))
+  # Laplace priors only
+  s_flist.LP <- c(
+    map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+    map(1, ~"bIntercept~1")
+  )
+  s_form_ord.LP <- bf(
+    glue("NcatNum | thres(3) ~ 1*bIntercept",
+         "{ifelse(length(s_yday)>0, '+', '')}",
+         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
+         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{paste(s_b, covar_s, sep='*', collapse='+')}"),
+    flist=s_flist.LP, nl=T)
+  s_form_bern.LP <- bf(
+    glue("Nbloom ~ 1*bIntercept",
+         "{ifelse(length(s_yday)>0, '+', '')}",
+         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
+         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{paste(s_b, covar_s, sep='*', collapse='+')}"),
+    flist=s_flist.LP, nl=T)
   
-  train.df <- target.df %>% filter(year <= 2017)
-  test.df <- target.df %>% filter(year > 2017)
-  bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
+  # Indicator variable: p * b * X
+  s_flist.p <- c(
+    map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+    map(s_p, ~as.formula(paste0(.x, "~ 1"))),
+    map(1, ~"bIntercept~1")
+  )
+  s_form_ord.p <- bf(
+    glue("NcatNum | thres(3) ~ 1*bIntercept",
+         "{ifelse(length(s_yday)>0, '+', '')}",
+         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
+         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{paste(s_p, s_b, covar_s, sep='*', collapse='+')}"),
+    flist=s_flist.p, nl=T)
+  s_form_bern.p <- bf(
+    glue("Nbloom ~ 1*bIntercept",
+         "{ifelse(length(s_yday)>0, '+', '')}",
+         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
+         "{ifelse(length(s_b)>0 & length(s_yday)>0, '+', '')}",
+         "{paste(s_p, s_b, covar_s, sep='*', collapse='+')}"),
+    flist=s_flist.p, nl=T)
   
-  out.ord[[sp]] <- brm(form_ordinal, data=train.df,
-                       family=cumulative("probit"), prior=priors, 
-                       iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}ord_{target}"))
-  out.sordP[[sp]] <- brm(s_form_ord.p, data=train.df, 
-                        family=cumulative("probit"), prior=s_priors.p, 
-                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}sord_p_{target}"))
-  out.sordLP[[sp]] <- brm(s_form_ord.LP, data=train.df, 
-                         family=cumulative("probit"), prior=s_priors.LP, 
-                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}sord_laplace_{target}"))
-  if(n_distinct(filter(train.df, Nbloom1==0)$NcatF1)==1) {
-    form_01 <- form_bern_noCatF
-  } else {
-    form_01 <- form_bern
-  }
-  out.bern01[[sp]] <- brm(form_01, data=train.df %>% filter(Nbloom1==0),
-                          family=bernoulli("probit"), prior=priors, 
-                          iter=iter, warmup=warmup, refresh=refresh, init=0,
-                          control=ctrl, chains=chains, cores=chains,
-                          file=glue("out{sep}test_full{sep}bern01_{target}"))
-  out.sbernP01[[sp]] <- brm(s_form_bern.p, data=train.df %>% filter(Nbloom1==0), 
-                           family=bernoulli("probit"), prior=s_priors.p, 
-                           iter=iter, warmup=warmup, refresh=refresh, init=0,
-                           control=ctrl, chains=chains, cores=chains,
-                           file=glue("out{sep}test_full{sep}sbern01_p_{target}"))
-  out.sbernLP01[[sp]] <- brm(s_form_bern.LP, data=train.df %>% filter(Nbloom1==0), 
-                           family=bernoulli("probit"), prior=s_priors.LP, 
-                           iter=iter, warmup=warmup, refresh=refresh, init=0,
-                           control=ctrl, chains=chains, cores=chains,
-                           file=glue("out{sep}test_full{sep}sbern01_p_{target}"))
-  out.bern11[[sp]] <- brm(form_bern, data=train.df %>% filter(Nbloom1==1),
-                          family=bernoulli("probit"), prior=priors, 
-                          iter=iter, warmup=warmup, refresh=refresh, init=0,
-                          control=ctrl, chains=chains, cores=chains,
-                          file=glue("out{sep}test_full{sep}bern11_{target}"))
-  out.sbernP11[[sp]] <- brm(s_form_bern.p, data=train.df %>% filter(Nbloom1==1), 
-                           family=bernoulli("probit"), prior=s_priors.p, 
-                           iter=iter, warmup=warmup, refresh=refresh, init=0,
-                           control=ctrl, chains=chains, cores=chains,
-                           file=glue("out{sep}test_full{sep}sbern11_p_{target}"))
-  out.sbernLP11[[sp]] <- brm(s_form_bern.LP, data=train.df %>% filter(Nbloom1==1), 
-                            family=bernoulli("probit"), prior=s_priors.LP, 
-                            iter=iter, warmup=warmup, refresh=refresh, init=0,
-                            control=ctrl, chains=chains, cores=chains,
-                            file=glue("out{sep}test_full{sep}sbern11_laplace_{target}"))
-  
-  # RF
-  rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", 
-               "ydaySin", "ydayCos", "fetch",
-               "Nln1", "Ncat1", "Nln2", "Ncat2", "NlnWt1", "NlnWt2", 
-               str_remove_all(covars, "\\.|_"))
-  train.rf <- train.df %>%
-    select(one_of(rf_vars)) %>%
-    mutate(Nbloom=factor(Nbloom)) %>%
-    as.data.frame()
-  test.rf <- test.df %>% 
-    select(one_of(rf_vars)) %>%
-    mutate(Nbloom=factor(Nbloom)) %>%
-    as.data.frame()
-  train.rf01 <- train.rf %>% filter(Nbloom1==0)
-  train.rf11 <- train.rf %>% filter(Nbloom1==1)
-  test.rf01 <- test.rf %>% filter(Nbloom1==0)
-  test.rf11 <- test.rf %>% filter(Nbloom1==1)
-  rf <- randomForest(Nbloom ~ ., data=train.rf, 
-                     xtest=test.rf[,-1], ytest=test.rf[,1], 
-                     proximity=T, keep.forest=T)
-  
-  rf.01 <- randomForest(Nbloom ~ ., data=train.rf01, 
-                        xtest=test.rf01[,-1], ytest=test.rf01[,1], 
-                        proximity=T, keep.forest=T)
-  
-  rf.11 <- randomForest(Nbloom ~ ., data=train.rf11, 
-                        xtest=test.rf11[,-1], ytest=test.rf11[,1], 
-                        proximity=T, keep.forest=T)
-  
-  # Fitted
-  fit.ord <- posterior_epred(out.ord[[sp]])
-  fit.sordP <- posterior_epred(out.sordP[[sp]])
-  fit.sordLP <- posterior_epred(out.sordLP[[sp]])
-  fit.bern01 <- posterior_epred(out.bern01[[sp]]) 
-  fit.sbernP01 <- posterior_epred(out.sbernP01[[sp]]) 
-  fit.sbernLP01 <- posterior_epred(out.sbernLP01[[sp]]) 
-  fit.bern11 <- posterior_epred(out.bern11[[sp]]) 
-  fit.sbernP11 <- posterior_epred(out.sbernP11[[sp]]) 
-  fit.sbernLP11 <- posterior_epred(out.sbernLP11[[sp]]) 
-  fit.rf <- predict(rf, train.rf, type="prob")
-  fit.rf.01 <- predict(rf.01, train.rf01, type="prob")
-  fit.rf.11 <- predict(rf.11, train.rf11, type="prob")
-  
-  fit.df <- full_join(
-    train.df %>%
-    mutate(ord_mnpr=calc_ord_mnpr(fit.ord, bloomThresh),
-           sordP_mnpr=calc_ord_mnpr(fit.sordP, bloomThresh),
-           sordLP_mnpr=calc_ord_mnpr(fit.sordLP, bloomThresh),
-           rf_mnpr=fit.rf[,2]),
-    tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
-           bern_mnpr=c(colMeans(fit.bern01), colMeans(fit.bern11)),
-           sbernP_mnpr=c(colMeans(fit.sbernP01), colMeans(fit.sbernP11)),
-           sbernLP_mnpr=c(colMeans(fit.sbernLP01), colMeans(fit.sbernLP11)),
-           rf_split_mnpr=c(fit.rf.01[,2], fit.rf.11[,2]))
-    )
-  write_csv(fit.df, glue("out{sep}test_full{sep}fit_{target}.csv"))
-  
-  # OOS predictions
-  pred.ord <- posterior_epred(out.ord[[sp]], 
-                              newdata=test.df, 
-                              allow_new_levels=T)
-  pred.sordP <- posterior_epred(out.sordP[[sp]], 
-                               newdata=test.df, 
-                               allow_new_levels=T)
-  pred.sordLP <- posterior_epred(out.sordLP[[sp]], 
-                                newdata=test.df, 
-                                allow_new_levels=T)
-  pred.bern01 <- posterior_epred(out.bern01[[sp]], 
-                                 newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
-                                 allow_new_levels=T) 
-  pred.sbernP01 <- posterior_epred(out.sbernP01[[sp]], 
-                                   newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
-                                   allow_new_levels=T) 
-  pred.sbernLP01 <- posterior_epred(out.sbernLP01[[sp]], 
-                                   newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
-                                   allow_new_levels=T) 
-  pred.bern11 <- posterior_epred(out.bern11[[sp]], 
-                                 newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
-                                 allow_new_levels=T) 
-  pred.sbernP11 <- posterior_epred(out.sbernP11[[sp]], 
-                                   newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
-                                   allow_new_levels=T) 
-  pred.sbernLP11 <- posterior_epred(out.sbernLP11[[sp]], 
-                                   newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
-                                   allow_new_levels=T) 
-  pred.rf <- predict(rf, test.rf, type="prob")
-  pred.rf.01 <- predict(rf.01, test.rf01, type="prob")
-  pred.rf.11 <- predict(rf.11, test.rf11, type="prob")
-  
-  pred.df <- full_join(
-    test.df %>%
-      mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
-             sordP_mnpr=calc_ord_mnpr(pred.sordP, bloomThresh),
-             sordLP_mnpr=calc_ord_mnpr(pred.sordLP, bloomThresh),
-             rf_mnpr=pred.rf[,2]),
-    tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
-           bern_mnpr=c(colMeans(pred.bern01), colMeans(pred.bern11)),
-           sbernP_mnpr=c(colMeans(pred.sbernP01), colMeans(pred.sbernP11)),
-           sbernLP_mnpr=c(colMeans(pred.sbernLP01), colMeans(pred.sbernLP11)),
-           rf_split_mnpr=c(pred.rf.01[,2], pred.rf.11[,2]))
+  # Priors
+  priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
+              prior(normal(0, 0.1), class="sd"))
+  s_priors.LP <- c(
+    prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
+    map(covar_s, 
+        ~c(prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x)),
+           prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
+      do.call('c', .), 
+    map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
+      do.call('c', .)
+  )
+  s_priors.p <- c(
+    prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
+    map(covar_s, 
+        ~c(prior_string("beta(0.1,1)", nlpar=paste0("p", .x), lb=0, ub=1),
+           prior_string("normal(0,1)", class="b", nlpar=paste0("b", .x)),
+           prior_string("normal(0,1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
+      do.call('c', .),
+    map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
+      do.call('c', .)
   )
   
-  write_csv(pred.df, glue("out{sep}test_full{sep}pred_{target}.csv"))
   
-  cat("Finished", target, "\n")
+  
+  
+  
+  
+  # initial fit -------------------------------------------------------------
+  
+  out.bern01 <- out.bernP01 <- out.bernLP01 <- vector("list", length(species))
+  out.bern11 <- out.bernP11 <- out.bernLP11 <- vector("list", length(species))
+  out.ord <- out.ordP <- out.ordLP <- vector("list", length(species))
+  
+  for(sp in 1:length(species)) {
+    target <- species[sp]
+    target.tf <- thresh.df %>% filter(hab_parameter==target)
+    
+    target.df <- sampling.df %>%
+      filter(grid==1) %>% 
+      rename(N=!!target) %>%
+      select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
+      mutate(yday=yday(date),
+             ydayCos=cos(2*pi*yday/365),
+             ydaySin=sin(2*pi*yday/365),
+             year=year(date),
+             bearing=bearing*pi/180,
+             N=round(N),
+             N.ln=log(N+1)) %>%
+      rowwise() %>%
+      mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
+      ungroup %>%
+      mutate(N.catF=factor(N.cat, levels=unique(target.tf$tl), ordered=T),
+             N.catNum=as.numeric(N.catF),
+             N.bloom=target.tf$bloom[match(N.cat, target.tf$tl)]) %>%
+      arrange(site.id, date) %>%
+      group_by(site.id) %>%
+      multijetlag(N.ln, N.cat, N.catF, N.bloom, date, n=2) %>%
+      ungroup %>%
+      mutate(across(starts_with("date_"), ~as.numeric(date-.x)),
+             # I don't love this since small if N.ln_x is small OR date_x is large
+             N.lnWt_1=N.ln_1/date_1,
+             N.lnWt_2=N.ln_2/date_2) %>%
+      full_join(hydro.df) %>%
+      full_join(connect.df) %>%
+      full_join(cprn.df) %>%
+      mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>%
+      mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
+      arrange(site.id, date) %>%
+      filter(complete.cases(.)) %>%
+      rename_with(~str_remove_all(.x, "\\.|_")) %>%
+      mutate(ydaySC=ydaySin*ydayCos,
+             windVel=windLwk*windDirLwk,
+             waterVelL=waterLwk*waterDirLwk,
+             waterVelR=waterRwk*waterDirRwk) %>%
+      select(siteid, lon, lat, date, year, obsid,
+             starts_with("N"), starts_with("date_"), starts_with("yday"),
+             one_of(covars, covar_int, covar_s, covar_date)) 
+    
+    write_csv(target.df, glue("out{sep}test_full{sep}dataset_{i.name}_{target}.csv"))
+    
+    train.df <- target.df %>% filter(year <= 2017)
+    test.df <- target.df %>% filter(year > 2017)
+    bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
+    
+    out.ord[[sp]] <- brm(form_ordinal, data=train.df,
+                         family=cumulative("probit"), prior=priors, 
+                         iter=iter, warmup=warmup, refresh=refresh, init=0,
+                         control=ctrl, chains=chains, cores=chains,
+                         file=glue("out{sep}test_full{sep}ord_{i.name}_{target}"))
+    out.ordP[[sp]] <- brm(s_form_ord.p, data=train.df, 
+                           family=cumulative("probit"), prior=s_priors.p, 
+                           iter=iter, warmup=warmup, refresh=refresh, init=0,
+                           control=ctrl, chains=chains, cores=chains,
+                           file=glue("out{sep}test_full{sep}ordP_{i.name}_{target}"))
+    out.ordLP[[sp]] <- brm(s_form_ord.LP, data=train.df, 
+                            family=cumulative("probit"), prior=s_priors.LP, 
+                            iter=iter, warmup=warmup, refresh=refresh, init=0,
+                            control=ctrl, chains=chains, cores=chains,
+                            file=glue("out{sep}test_full{sep}ordLP_{i.name}_{target}"))
+    if(n_distinct(filter(train.df, Nbloom1==0)$NcatF1)==1) {
+      form_01 <- form_bern_noCatF
+    } else {
+      form_01 <- form_bern
+    }
+    out.bern01[[sp]] <- brm(form_01, data=train.df %>% filter(Nbloom1==0),
+                            family=bernoulli("probit"), prior=priors, 
+                            iter=iter, warmup=warmup, refresh=refresh, init=0,
+                            control=ctrl, chains=chains, cores=chains,
+                            file=glue("out{sep}test_full{sep}bern01_{i.name}_{target}"))
+    out.bernP01[[sp]] <- brm(s_form_bern.p, data=train.df %>% filter(Nbloom1==0), 
+                              family=bernoulli("probit"), prior=s_priors.p, 
+                              iter=iter, warmup=warmup, refresh=refresh, init=0,
+                              control=ctrl, chains=chains, cores=chains,
+                              file=glue("out{sep}test_full{sep}bernP01_{i.name}_{target}"))
+    out.bernLP01[[sp]] <- brm(s_form_bern.LP, data=train.df %>% filter(Nbloom1==0), 
+                               family=bernoulli("probit"), prior=s_priors.LP, 
+                               iter=iter, warmup=warmup, refresh=refresh, init=0,
+                               control=ctrl, chains=chains, cores=chains,
+                               file=glue("out{sep}test_full{sep}bernLP01_{i.name}_{target}"))
+    out.bern11[[sp]] <- brm(form_bern, data=train.df %>% filter(Nbloom1==1),
+                            family=bernoulli("probit"), prior=priors, 
+                            iter=iter, warmup=warmup, refresh=refresh, init=0,
+                            control=ctrl, chains=chains, cores=chains,
+                            file=glue("out{sep}test_full{sep}bern11_{i.name}_{target}"))
+    out.bernP11[[sp]] <- brm(s_form_bern.p, data=train.df %>% filter(Nbloom1==1), 
+                              family=bernoulli("probit"), prior=s_priors.p, 
+                              iter=iter, warmup=warmup, refresh=refresh, init=0,
+                              control=ctrl, chains=chains, cores=chains,
+                              file=glue("out{sep}test_full{sep}bernP11_{i.name}_{target}"))
+    out.bernLP11[[sp]] <- brm(s_form_bern.LP, data=train.df %>% filter(Nbloom1==1), 
+                               family=bernoulli("probit"), prior=s_priors.LP, 
+                               iter=iter, warmup=warmup, refresh=refresh, init=0,
+                               control=ctrl, chains=chains, cores=chains,
+                               file=glue("out{sep}test_full{sep}bernLP11_{i.name}_{target}"))
+    
+    # RF
+    rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s, covars)
+    train.rf <- train.df %>% mutate(Nbloom=factor(Nbloom)) %>%
+      select(one_of(rf_vars)) %>% as.data.frame()
+    train.rf01 <- train.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+      filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% as.data.frame()
+    train.rf11 <- train.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+      filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% as.data.frame()
+    test.rf <- test.df %>% mutate(Nbloom=factor(Nbloom)) %>%
+      select(one_of(rf_vars)) %>% as.data.frame()
+    test.rf01 <- test.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+      filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% as.data.frame()
+    test.rf11 <- test.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+      filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% as.data.frame()
+    
+    rf <- randomForest(Nbloom ~ ., data=train.rf, 
+                       xtest=test.rf[,-1], ytest=test.rf[,1],
+                       proximity=T, keep.forest=T)
+    rf.01 <- randomForest(Nbloom ~ ., data=train.rf01, 
+                          xtest=test.rf01[,-1], ytest=test.rf01[,1], 
+                          proximity=T, keep.forest=T)
+    rf.11 <- randomForest(Nbloom ~ ., data=train.rf11, 
+                          xtest=test.rf11[,-1], ytest=test.rf11[,1], 
+                          proximity=T, keep.forest=T)
+    
+    # Fitted
+    fit.ord <- posterior_epred(out.ord[[sp]])
+    fit.ordP <- posterior_epred(out.ordP[[sp]])
+    fit.ordLP <- posterior_epred(out.ordLP[[sp]])
+    fit.bern01 <- posterior_epred(out.bern01[[sp]]) 
+    fit.bernP01 <- posterior_epred(out.bernP01[[sp]]) 
+    fit.bernLP01 <- posterior_epred(out.bernLP01[[sp]]) 
+    fit.bern11 <- posterior_epred(out.bern11[[sp]]) 
+    fit.bernP11 <- posterior_epred(out.bernP11[[sp]]) 
+    fit.bernLP11 <- posterior_epred(out.bernLP11[[sp]]) 
+    
+    fit.df <- full_join(
+      train.df %>%
+        mutate(ord_mnpr=calc_ord_mnpr(fit.ord, bloomThresh),
+               ordP_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh),
+               ordLP_mnpr=calc_ord_mnpr(fit.ordLP, bloomThresh),
+               rf_mnpr=rf$votes[,2]),
+      tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
+             bern_mnpr=c(colMeans(fit.bern01), colMeans(fit.bern11)),
+             bernP_mnpr=c(colMeans(fit.bernP01), colMeans(fit.bernP11)),
+             bernLP_mnpr=c(colMeans(fit.bernLP01), colMeans(fit.bernLP11)),
+             rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]))
+    ) %>%
+      mutate(covarSet=i.name)
+    write_csv(fit.df, glue("out{sep}test_full{sep}fit_{i.name}_{target}.csv"))
+    
+    # OOS predictions
+    pred.ord <- posterior_epred(out.ord[[sp]], 
+                                newdata=test.df, 
+                                allow_new_levels=T)
+    pred.ordP <- posterior_epred(out.ordP[[sp]], 
+                                 newdata=test.df, 
+                                 allow_new_levels=T)
+    pred.ordLP <- posterior_epred(out.ordLP[[sp]], 
+                                  newdata=test.df, 
+                                  allow_new_levels=T)
+    pred.bern01 <- posterior_epred(out.bern01[[sp]], 
+                                   newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
+                                   allow_new_levels=T) 
+    pred.bernP01 <- posterior_epred(out.bernP01[[sp]], 
+                                    newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
+                                    allow_new_levels=T) 
+    pred.bernLP01 <- posterior_epred(out.bernLP01[[sp]], 
+                                     newdata=test.df %>% filter(Nbloom1==0) %>% droplevels, 
+                                     allow_new_levels=T) 
+    pred.bern11 <- posterior_epred(out.bern11[[sp]], 
+                                   newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
+                                   allow_new_levels=T) 
+    pred.bernP11 <- posterior_epred(out.bernP11[[sp]], 
+                                    newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
+                                    allow_new_levels=T) 
+    pred.bernLP11 <- posterior_epred(out.bernLP11[[sp]], 
+                                     newdata=test.df %>% filter(Nbloom1==1) %>% droplevels, 
+                                     allow_new_levels=T) 
+    
+    pred.df <- full_join(
+      test.df %>%
+        mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
+               ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
+               ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
+               rf_mnpr=rf$test$votes[,2]),
+      tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
+             bern_mnpr=c(colMeans(pred.bern01), colMeans(pred.bern11)),
+             bernP_mnpr=c(colMeans(pred.bernP01), colMeans(pred.bernP11)),
+             bernLP_mnpr=c(colMeans(pred.bernLP01), colMeans(pred.bernLP11)),
+             rf_split_mnpr=c(rf.01$test$votes[,2], rf.11$test$votes[,2]))
+    ) %>%
+      mutate(covarSet=i.name)
+    
+    write_csv(pred.df, glue("out{sep}test_full{sep}pred_{i.name}_{target}.csv"))
+    
+    cat("Finished", target, "\n")
+  }
+  
 }
+
+
 
 
 
