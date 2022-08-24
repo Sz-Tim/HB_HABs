@@ -280,7 +280,8 @@ for(i in seq_along(covariate_sets)) {
              waterVelR=waterRwk*waterDirRwk) %>%
       select(siteid, lon, lat, date, year, obsid,
              starts_with("N"), starts_with("date_"), starts_with("yday"),
-             one_of(covars, covar_int, covar_s, covar_date)) 
+             one_of(covars, covar_int, covar_s, covar_date)) %>%
+      mutate(covarSet=i.name)
     
     write_csv(target.df, glue("out{sep}test_full{sep}dataset_{i.name}_{target}.csv"))
     
@@ -343,15 +344,15 @@ for(i in seq_along(covariate_sets)) {
     rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s, covars)
     train.rf <- train.df %>% mutate(Nbloom=factor(Nbloom)) %>%
       select(one_of(rf_vars)) %>% as.data.frame()
-    train.rf01 <- train.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+    train.rf01 <- train.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
       filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% as.data.frame()
-    train.rf11 <- train.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+    train.rf11 <- train.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
       filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% as.data.frame()
     test.rf <- test.df %>% mutate(Nbloom=factor(Nbloom)) %>%
       select(one_of(rf_vars)) %>% as.data.frame()
-    test.rf01 <- test.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+    test.rf01 <- test.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
       filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% as.data.frame()
-    test.rf11 <- test.rf %>% mutate(Nbloom=factor(Nbloom)) %>% 
+    test.rf11 <- test.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
       filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% as.data.frame()
     
     rf <- randomForest(Nbloom ~ ., data=train.rf, 
