@@ -80,8 +80,7 @@ connect.df <- read_csv(glue("data{sep}connectivity_5e3parts.csv")) %>%
   group_by(site.id) %>%
   mutate(influx_wk=zoo::rollsum(influx, 7, align='right', fill="extend")) %>%
   mutate(across(starts_with("influx"), ~log(.x+1)))
-cprn.df <- read_csv("data/copernicus_westcoms1.csv") %>%
-  mutate(site.id=site.id_v1) %>%
+cprn.df <- read_csv("data/cprn.csv") %>%
   select(site.id, date, attn_wk, chl_wk, dino_wk, o2_wk, ph_wk, po4_wk)
 # >0.85 cor(res,time) = temp, salinity
 # >0.85 cor(res) = short_wave, km, precip, wind, windDir
@@ -126,6 +125,8 @@ covariate_sets <- list(
   all=".",
   null="NA"
 )
+
+#TODO: External, local, cprn with WeStCOMS2 = all sites
 
 
 for(i in seq_along(covariate_sets)) {
@@ -242,7 +243,7 @@ for(i in seq_along(covariate_sets)) {
     target.tf <- thresh.df %>% filter(hab_parameter==target)
     
     target.df <- sampling.df %>%
-      filter(grid==1) %>% 
+      # filter(grid==1) %>%
       rename(N=!!target) %>%
       select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
       mutate(yday=yday(date),
@@ -272,7 +273,6 @@ for(i in seq_along(covariate_sets)) {
       mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>%
       mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
       arrange(site.id, date) %>%
-      filter(complete.cases(.)) %>%
       rename_with(~str_remove_all(.x, "\\.|_")) %>%
       mutate(ydaySC=ydaySin*ydayCos,
              windVel=windLwk*windDirLwk,
@@ -281,12 +281,13 @@ for(i in seq_along(covariate_sets)) {
       select(siteid, lon, lat, date, year, obsid,
              starts_with("N"), starts_with("date_"), starts_with("yday"),
              one_of(covars, covar_int, covar_s, covar_date)) %>%
+      filter(complete.cases(.)) %>%
       mutate(covarSet=i.name)
     
     write_csv(target.df, glue("out{sep}test_full{sep}dataset_{i.name}_{target}.csv"))
     
-    train.df <- target.df %>% filter(year <= 2017)
-    test.df <- target.df %>% filter(year > 2017)
+    train.df <- target.df %>% filter(year <= 2019)
+    test.df <- target.df %>% filter(year > 2019)
     bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
     
     out.ord[[sp]] <- brm(form_ordinal, data=train.df,
