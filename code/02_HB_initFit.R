@@ -67,8 +67,8 @@ hydro.df <- dir("data", "hydro_", full.names=T) %>%
   pivot_wider(names_from="parType", values_from="value") %>%
   mutate(water=sqrt(u^2 + v^2 + ww^2),
          wind=sqrt(uwind_speed^2 + vwind_speed^2),
-         waterDir=atan2(v, u),
-         windDir=atan2(vwind_speed, uwind_speed),
+         waterDir=atan2(v, u), # moving N = 0; moving S = pi
+         windDir=atan2(vwind_speed, uwind_speed), # blowing N = 0; blowing S = pi
          timespan=if_else(lag=="0", "0", "wk")) %>% 
   select(-u, -v, -ww, -vwind_speed, -uwind_speed) %>%
   group_by(obs.id, res, timespan) %>%
@@ -250,7 +250,7 @@ for(i in seq_along(covariate_sets)) {
              ydayCos=cos(2*pi*yday/365),
              ydaySin=sin(2*pi*yday/365),
              year=year(date),
-             bearing=bearing*pi/180,
+             bearing=bearing*pi/180, # Nearest shore: N=pi, S=0
              N=round(N),
              N.ln=log(N+1)) %>%
       rowwise() %>%
@@ -270,7 +270,7 @@ for(i in seq_along(covariate_sets)) {
       full_join(hydro.df) %>%
       full_join(connect.df) %>%
       full_join(cprn.df) %>%
-      mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>%
+      mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>% # -1 = toward shore, 1 = away from shore
       mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
       arrange(site.id, date) %>%
       rename_with(~str_remove_all(.x, "\\.|_")) %>%
@@ -779,23 +779,55 @@ for(i in seq_along(covariate_sets)) {
 # 
 # 
 # 
-# obs.df <- map_dfr(species, ~read_csv(glue("out{sep}dataset_{.x}.csv")) %>% 
+
+# for(sp in 1:length(species)) {
+#   target <- species[sp]
+#   target.tf <- thresh.df %>% filter(hab_parameter==target)
+#   
+#   target.df <- sampling.df %>%
+#     rename(N=!!target) %>%
+#     select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
+#     mutate(yday=yday(date),
+#            ydayCos=cos(2*pi*yday/365),
+#            ydaySin=sin(2*pi*yday/365),
+#            year=year(date),
+#            bearing=bearing*pi/180,
+#            N=round(N),
+#            N.ln=log(N+1)) %>%
+#     rowwise() %>%
+#     mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
+#     ungroup %>%
+#     mutate(N.bloom=target.tf$bloom[match(N.cat, target.tf$tl)]) %>%
+#     arrange(site.id, date) %>%
+#     group_by(site.id) %>%
+#     multijetlag(N.ln, N.cat, N.bloom, date, n=2) %>%
+#     ungroup %>%
+#     arrange(site.id, date) %>%
+#     rename_with(~str_remove_all(.x, "\\.|_"))
+#   
+#   write_csv(target.df, glue("out{sep}dataset_{target}.csv"))
+# }
+# obs.df <- map_dfr(species, ~read_csv(glue("out{sep}dataset_{.x}.csv")) %>%
 #                     mutate(species=.x))
 # 
 # obs.df %>% mutate(week=week(date)) %>%
 #   group_by(week, species) %>%
-#   summarise(mn=mean(N.bloom),
-#             q_lo=Hmisc::binconf(sum(N.bloom), n(), alpha=0.05)[1,2],
-#             q_hi=Hmisc::binconf(sum(N.bloom), n(), alpha=0.05)[1,3]) %>%
-#   ggplot(aes(week)) + 
-#   geom_point(aes(y=mn)) +
-#   geom_linerange(aes(ymin=q_lo, ymax=q_hi)) +
+#   summarise(mn=mean(Nbloom),
+#             q_lo=Hmisc::binconf(sum(Nbloom), n(), alpha=0.05)[1,2],
+#             q_hi=Hmisc::binconf(sum(Nbloom), n(), alpha=0.05)[1,3],
+#             N=n()) %>%
+#   ungroup %>%
+#   mutate(propN=N/max(N)) %>%
+#   ggplot(aes(week)) +
+#   geom_point(aes(y=mn, alpha=N)) +
+#   geom_linerange(aes(ymin=q_lo, ymax=q_hi, alpha=N)) +
 #   facet_wrap(~species, nrow=1) + theme_classic() +
 #   scale_x_continuous(breaks=seq(1,50,length.out=5), labels=c("Jan", "Apr", "Jul", "Oct", "Dec")) +
+#   scale_alpha_continuous(range=c(0.25, 1)) +
 #   ylim(0,1) +
 #   labs(x="Week", y="Proportion of sites with blooms") +
 #   theme(strip.text=element_text(size=12))
-# ggsave(glue("figs{sep}temp{sep}obs_bloom_proportion.png"), width=12, height=3, dpi=300)
+# ggsave(glue("figs{sep}obs_bloom_proportion.png"), width=12, height=3, dpi=300)
 # 
 # 
 # obs.df %>% mutate(week=week(date)) %>%

@@ -2,6 +2,18 @@
 
 
 
+
+# wind/water directions ---------------------------------------------------
+
+expand_grid(x=seq(-1,1,length.out=20), 
+            y=seq(-1,1,length.out=20)) %>% 
+  mutate(dir=atan2(x,y)) %>% 
+  mutate(Nshore=pi, 
+         Sshore=0) %>% 
+  ggplot(aes(x,y,colour=cos(dir-Sshore))) + 
+  geom_point() + scale_colour_distiller(type="div")
+# With this parameterisation, NEG = TOWARD shore, POS = AWAY from shore
+
 # get fetch ---------------------------------------------------------------
 
 library(raster); library(sf)
