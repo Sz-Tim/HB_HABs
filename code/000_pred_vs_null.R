@@ -60,26 +60,26 @@ LL.B1 <- fit.df %>%
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
   ungroup
-LL.moB1 <- fit.df %>% 
-  group_by(covarSet, species, month, Nbloom1) %>% 
-  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
-  ungroup
-LL.stB1 <- fit.df %>% 
-  group_by(covarSet, species, siteid, Nbloom1) %>% 
-  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
-  ungroup
-LL.moSt <- fit.df %>% 
-  group_by(covarSet, species, month, siteid) %>% 
-  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
-  ungroup
-LL.moStB1 <- fit.df %>% 
-  group_by(covarSet, species, month, siteid, Nbloom1) %>% 
-  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
-  ungroup
+# LL.moB1 <- fit.df %>% 
+#   group_by(covarSet, species, month, Nbloom1) %>% 
+#   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+#   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+#   ungroup
+# LL.stB1 <- fit.df %>% 
+#   group_by(covarSet, species, siteid, Nbloom1) %>% 
+#   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+#   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+#   ungroup
+# LL.moSt <- fit.df %>% 
+#   group_by(covarSet, species, month, siteid) %>% 
+#   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+#   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+#   ungroup
+# LL.moStB1 <- fit.df %>% 
+#   group_by(covarSet, species, month, siteid, Nbloom1) %>% 
+#   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+#   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
+#   ungroup
 
 pred.df <- map_dfr(dir("out/test_full/", "^pred.*csv"), 
                   ~read_csv(glue("out/test_full/{.x}")) %>%
@@ -99,34 +99,71 @@ pred.ens <- pred.df %>%
   ungroup() %>% select(-ends_with("wt")) %>% 
   left_join(LL.B1) %>% rowwise() %>%
   mutate(avgB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
-  ungroup() %>% select(-ends_with("wt")) %>% 
-  left_join(LL.moB1) %>% rowwise() %>%
-  mutate(avgMoB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
-  ungroup() %>% select(-ends_with("wt")) %>% 
-  left_join(LL.stB1) %>% rowwise() %>%
-  mutate(avgStB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
-  ungroup() %>% select(-ends_with("wt")) %>% 
-  left_join(LL.moSt) %>% rowwise() %>%
-  mutate(avgMoSt=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
-  ungroup() %>% select(-ends_with("wt")) %>%
-  left_join(LL.moStB1) %>% rowwise() %>%
-  mutate(avgMoStB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
-  ungroup() %>% select(-ends_with("wt"))
+  ungroup() %>% select(-ends_with("wt")) #%>% 
+  # left_join(LL.moB1) %>% rowwise() %>%
+  # mutate(avgMoB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  # ungroup() %>% select(-ends_with("wt")) %>% 
+  # left_join(LL.stB1) %>% rowwise() %>%
+  # mutate(avgStB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  # ungroup() %>% select(-ends_with("wt")) %>% 
+  # left_join(LL.moSt) %>% rowwise() %>%
+  # mutate(avgMoSt=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  # ungroup() %>% select(-ends_with("wt")) %>%
+  # left_join(LL.moStB1) %>% rowwise() %>%
+  # mutate(avgMoStB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  # ungroup() %>% select(-ends_with("wt"))
 pred.df <- pred.ens %>% 
   mutate(avgSt=if_else(is.na(avgSt), avg, avgSt),
-         avgMo=if_else(is.na(avgMo), avg, avgMo),
-         avgStB1=if_else(is.na(avgStB1), avgB1, avgStB1),
-         avgMoSt=if_else(is.na(avgMoSt), avgMo, avgMoSt),
-         avgMoB1=if_else(is.na(avgMoB1), avgB1, avgMoB1),
-         avgMoStB1=if_else(is.na(avgMoStB1), avgMoB1, avgMoStB1)) %>%
+         avgMo=if_else(is.na(avgMo), avg, avgMo)#,
+         # avgStB1=if_else(is.na(avgStB1), avgB1, avgStB1),
+         # avgMoSt=if_else(is.na(avgMoSt), avgMo, avgMoSt),
+         # avgMoB1=if_else(is.na(avgMoB1), avgB1, avgMoB1),
+         # avgMoStB1=if_else(is.na(avgMoStB1), avgMoB1, avgMoStB1)
+         ) %>%
   rename(avg_mnpr=avg, 
          avgMo_mnpr=avgMo,
          avgSt_mnpr=avgSt,
-         avgB1_mnpr=avgB1,
-         avgMoB1_mnpr=avgMoB1,
-         avgStB1_mnpr=avgStB1,
-         avgMoSt_mnpr=avgMoSt,
-         avgMoStB1_mnpr=avgMoStB1) %>%
+         avgB1_mnpr=avgB1#,
+         # avgMoB1_mnpr=avgMoB1,
+         # avgStB1_mnpr=avgStB1,
+         # avgMoSt_mnpr=avgMoSt,
+         # avgMoStB1_mnpr=avgMoStB1
+         ) %>%
+  group_by(species, covarSet) %>%
+  left_join(., data.df %>% select(species, covarSet, obsid, ends_with("_mnpr")),
+            by=c("species", "covarSet", "obsid")) %>%
+  pivot_longer(ends_with("_mnpr"), names_to="model", values_to="pred") %>%
+  mutate(model=str_remove(model, "_mnpr"),
+         siteNum=as.numeric(as.factor(siteid))) %>%
+  mutate(modType=case_when(grepl("mo|xy|mean", model) ~ "Null",
+                           grepl("LP", model) ~ "Laplace",
+                           grepl("rf", model) ~ "RF",
+                           model %in% c("bern", "ord") ~ "intrct",
+                           model %in% c("bernP", "ordP") ~ "indVar",
+                           grepl("avg", model) ~ "ens"))
+
+fit.ens <- fit.df %>% 
+  left_join(LL.tot) %>% rowwise() %>%
+  mutate(avg=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.mo) %>% rowwise() %>%
+  mutate(avgMo=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.st) %>% rowwise() %>%
+  mutate(avgSt=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) %>% 
+  left_join(LL.B1) %>% rowwise() %>%
+  mutate(avgB1=sum(c_across(ends_with("wt")) * c_across(ends_with("mnpr")))) %>%
+  ungroup() %>% select(-ends_with("wt")) 
+fit.df_ <- fit.ens %>% 
+  mutate(avgSt=if_else(is.na(avgSt), avg, avgSt),
+         avgMo=if_else(is.na(avgMo), avg, avgMo)
+  ) %>%
+  rename(avg_mnpr=avg, 
+         avgMo_mnpr=avgMo,
+         avgSt_mnpr=avgSt,
+         avgB1_mnpr=avgB1
+  ) %>%
   group_by(species, covarSet) %>%
   left_join(., data.df %>% select(species, covarSet, obsid, ends_with("_mnpr")),
             by=c("species", "covarSet", "obsid")) %>%
@@ -181,9 +218,9 @@ mod_cols <- c(mean="black", mo="grey40", xy="grey60", mo_xy="grey80",
               bern="dodgerblue", bernLP="dodgerblue", bernP="dodgerblue",
               ord="cadetblue", ordLP="cadetblue", ordP="cadetblue",
               rf="green4", rf_split="green3",
-              avg="red", avgMoStB1="red3",
-              avgMo="purple", avgSt="purple3", avgB1="purple4",
-              avgMoB1="yellow", avgStB1="yellow3", avgMoSt="yellow4")
+              avg="red", #avgMoStB1="red3",
+              avgMo="purple", avgSt="purple3", avgB1="purple4")#,
+              # avgMoB1="yellow", avgStB1="yellow3", avgMoSt="yellow4")
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
@@ -193,11 +230,28 @@ pred.df %>% ungroup %>%
   arrange(species, model) %>%
   mutate(R2=1 - LL/first(LL)) %>%
   ggplot(aes(model, R2, colour=model, group=model)) +
-  geom_point() +
+  geom_point() + geom_rug(sides="l") +
   facet_grid(species~covarSet) + 
-  scale_y_continuous(limits=c(-0.1, 0.5), breaks=c(0, 0.2, 0.4)) +
+  scale_y_continuous(limits=c(0, 0.5), breaks=c(0, 0.2, 0.4)) +
   scale_colour_manual(values=mod_cols) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), panel.grid.minor.y=element_blank())
+ggsave("figs/R2_allModels_pred.jpg", width=11, height=7, units="in")
+fit.df_ %>% ungroup %>%
+  mutate(model=factor(model, levels=names(mod_cols))) %>%
+  mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
+  group_by(species, covarSet, model, modType) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  group_by(species, covarSet) %>%
+  arrange(species, model) %>%
+  mutate(R2=1 - LL/first(LL)) %>%
+  ggplot(aes(model, R2, colour=model, group=model)) +
+  geom_point() + geom_rug(sides="l") +
+  facet_grid(species~covarSet) + 
+  scale_y_continuous(limits=c(0, 0.5), breaks=c(0, 0.2, 0.4)) +
+  scale_colour_manual(values=mod_cols) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), panel.grid.minor.y=element_blank())
+ggsave("figs/R2_allModels_fit.jpg", width=11, height=7, units="in")
+
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
@@ -210,23 +264,28 @@ pred.df %>% ungroup %>%
   ggplot(aes(model, R2, colour=model, group=model, shape=Bloom_1)) +
   geom_point() +
   facet_grid(species~covarSet) + 
-  ylim(-0.1, 0.5) +
+  scale_y_continuous(limits=c(0, 0.7), breaks=c(0, 0.2, 0.4, 0.6)) +
   scale_colour_manual(values=mod_cols) +
   scale_shape_manual(values=c(19,1)) +
-  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
-pred.df %>% ungroup %>%
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), panel.grid.minor.y=element_blank())
+ggsave("figs/R2_allModels_pred_01.jpg", width=11, height=7, units="in")
+fit.df_ %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   mutate(pred=pmax(pmin(pred, 1-1e-7), 1e-7)) %>%
-  group_by(species, covarSet, model, modType) %>%
+  mutate(Bloom_1=if_else(Nbloom1==0, "from No Bloom", "from Bloom")) %>%
+  group_by(species, covarSet, model, modType, Bloom_1) %>%
   summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
-  group_by(species, covarSet) %>%
+  group_by(species, covarSet, Bloom_1) %>%
   arrange(species, model) %>%
   mutate(R2=1 - LL/first(LL)) %>%
-  ggplot(aes(model, R2, colour=covarSet, group=covarSet)) +
-  geom_point() + geom_line() +
-  facet_grid(species~.) + 
-  scale_y_continuous(limits=c(-0.1, 0.5), breaks=c(0, 0.2, 0.4)) +
+  ggplot(aes(model, R2, colour=model, group=model, shape=Bloom_1)) +
+  geom_point() +
+  facet_grid(species~covarSet) + 
+  scale_y_continuous(limits=c(0, 0.7), breaks=c(0, 0.2, 0.4, 0.6)) +
+  scale_colour_manual(values=mod_cols) +
+  scale_shape_manual(values=c(19,1)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), panel.grid.minor.y=element_blank())
+ggsave("figs/R2_allModels_fit_01.jpg", width=11, height=7, units="in")
 
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
@@ -792,11 +851,13 @@ sams.cols <- c("alexandrium_sp"="#2A5883",
                "karenia_mikimotoi"="#A9DAE0",
                "prorocentrum_lima"="#E77334",
                "pseudo_nitzschia_sp"="#D21E4C")
-nlpars <- c('bydayC', 'bydayS', 'bydaySC', 'btempLwk', 'bshortwaveLwk', 
-            'bwindVel', 'binfluxwk', 'bfetch', 'bdinowk', 'bo2wk', 'bpo4wk', 
-            'bNbloom1', 'bNbloom2')
-out.alex <- readRDS("out/test_full/sord_laplace_alexandrium_sp.rds")
-data.alex <- read_csv("out/test_full/dataset_alexandrium_sp.csv")
+nlpars <- c('bydayCos', 'bydaySin', 
+            'btempLwk', 'bsalinityLwk', 'bshortwaveLwk', 
+            'bwindVel', 'bwaterVelL', 'bwaterVelR', 'binfluxwk', 'bfetch', 
+            'battnwk', 'bchlwk', 'bdinowk', 'bo2wk', 'bphwk', 'bpo4wk', 
+            'bNbloom1', 'bNbloom2', 'bNlnWt1', 'bNlnWt2')
+out.alex <- readRDS("out/test_full/ordP_all_alexandrium_sp.rds")
+data.alex <- read_csv("out/test_full/dataset_all_alexandrium_sp.csv")
 pred.alex <- map_dfr(nlpars, ~data.alex %>%
                        mutate(slope=colMeans(posterior_epred(out.alex, newdata=., allow_new_levels=T, nlpar=.x)),
                               var=.x))
@@ -806,8 +867,8 @@ ggplot(pred.alex, aes(yday, slope)) +
   geom_point(alpha=0.5) + facet_wrap(~var)
 
 
-out.dino <- readRDS("out/test_full/sord_laplace_dinophysis_sp.rds")
-data.dino <- read_csv("out/test_full/dataset_dinophysis_sp.csv")
+out.dino <- readRDS("out/test_full/ordP_all_dinophysis_sp.rds")
+data.dino <- read_csv("out/test_full/dataset_all_dinophysis_sp.csv")
 pred.dino <- map_dfr(nlpars, ~data.dino %>%
                        mutate(slope=colMeans(posterior_epred(out.dino, newdata=., allow_new_levels=T, nlpar=.x)),
                               var=.x))
@@ -818,20 +879,20 @@ ggplot(pred.dino, aes(yday, slope)) +
 
 pred.da <- bind_rows(pred.alex %>% mutate(species="alexandrium_sp"),
                      pred.dino %>% mutate(species="dinophysis_sp"))
-ggplot(pred.da, aes(yday, slope, colour=species)) + 
+ggplot(pred.da, aes(yday, slope, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30") +
-  geom_point(alpha=0.5, shape=1, size=0.7) + facet_wrap(~var) +
+  geom_line(alpha=0.5) + facet_wrap(~var) +
   scale_colour_manual(values=sams.cols) +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1)))
 
 
-
-out.p <- dir("out/test_full", "ord_p_", full.names=T) %>%
+species <- names(sams.cols)
+out.p <- dir("out/test_full", "ordP_all_", full.names=T) %>%
   map(readRDS) %>% setNames(species)
 p.effects <- c('tempLwk', 'salinityLwk', 
                'shortwaveLwk', 'windVel', 'waterVelL', 'waterVelR', 'influxwk', 
                'fetch', 'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2')
+               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2')
 p.nonZero <- map(out.p, ~fixef(.x) %>% 
                    as_tibble(rownames="var") %>%
                    filter(grepl("^p", var)) %>%
@@ -839,7 +900,7 @@ p.nonZero <- map(out.p, ~fixef(.x) %>%
 library(bayesplot)
 imap(out.p, ~mcmc_intervals(.x, regex_pars="^b_p.*Intercept") + ggtitle(.y))
 
-data.alex <- read_csv("out/test_full/dataset_alexandrium_sp.csv")
+data.alex <- read_csv("out/test_full/dataset_all_alexandrium_sp.csv")
 
 smooths.df <- bind_cols(expand_grid(yday=seq(1, 365, length.out=52),
                                     siteid=unique(data.alex$siteid)) %>%
@@ -869,14 +930,14 @@ ggplot(pred.smooths, aes(yday, slope*p, colour=species, group=paste(species, sit
   scale_colour_brewer(type="qual", palette=2) +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid=element_blank())
-
+ggsave("figs/smooths_all.jpg", width=7, height=6)
 
 
 
 
 
 out.p <- dir("out/test_full", "ordP_", full.names=T) %>%
-  map(readRDS) %>% setNames(c("autoreg", "cprn", "external", "local"))
+  map(readRDS) %>% setNames(c("autoreg", "cprn", "external", "local", "all"))
 p.effects <- c('tempLwk', 'salinityLwk', 
                'shortwaveLwk', 'windVel', 'waterVelL', 'waterVelR', 'influxwk', 
                'fetch', 'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
