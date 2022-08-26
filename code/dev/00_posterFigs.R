@@ -15,22 +15,22 @@ invisible(lapply(pkgs, library, character.only=T))
 theme_set(theme_classic() + theme(panel.grid.minor=element_blank()))
 source("code/000_fnMisc.R")
 
-mesh.f <- paste0("C:\\Users\\sa04ts\\OneDrive - SAMS\\Projects\\WeStCOMS\\data\\",
+mesh.f <- paste0("../../WeStCOMS/data/",
                  c("WeStCOMS_mesh.gpkg", "WeStCOMS2_mesh.gpkg"))
 mesh.sf <- map(mesh.f, loadMesh)
 
-gis.dir <- "..\\..\\00_gis\\"
-coast <- read_sf(paste0(gis.dir, "coastline\\ne_10m_land.shp")) %>%
-  add_row(read_sf(paste0(gis.dir, "coastline\\ne_10m_minor_islands.shp")))
+gis.dir <- "../../00_gis/"
+coast <- read_sf(paste0(gis.dir, "coastline/ne_10m_land.shp")) %>%
+  add_row(read_sf(paste0(gis.dir, "coastline/ne_10m_minor_islands.shp")))
 
-sampling.df <- read_csv("data\\sampling_local.csv") 
+sampling.df <- read_csv("data/sampling_local.csv") 
 sites.sf <- sampling.df %>% 
   group_by(site.id) %>%
   summarise(lon=median(lon), lat=median(lat)) %>%
   ungroup %>%
   st_as_sf(coords=c("lon", "lat"), crs=27700)
 
-thresh.df <- read_csv("data\\hab_tf_thresholds.csv") %>%
+thresh.df <- read_csv("data/hab_tf_thresholds.csv") %>%
   filter(!is.na(tl)) %>%
   group_by(hab_parameter, tl) %>%
   slice_head(n=1) %>%
@@ -105,7 +105,16 @@ p <- ggplot() +
   scale_x_continuous(limits=c(-7.75, -4.25), breaks=c(-7, -5)) +
   scale_y_continuous(limits=c(54.5, 58.5), breaks=c(55, 57)) +
   coord_sf(label_axes="-NE-") + poster_theme
-ggsave("figs\\poster\\map.png", p, height=8, width=4.25, dpi=300)  
+ggsave("figs/poster/map.png", p, height=8, width=4.25, dpi=300)  
+
+p <- ggplot() +
+  geom_sf(data=coast, fill="#1E525E", colour=NA) +
+  geom_sf(data=mesh.sf[[2]], fill=NA, colour="#46BFDE", size=0.1) +
+  geom_sf(data=sites.sf, colour="#E77334", size=3) +
+  scale_x_continuous(limits=c(-8.2, -4.4), breaks=c(-8, -4)) +
+  scale_y_continuous(limits=c(54, 59.2), breaks=c(55, 57, 59)) +
+  coord_sf(label_axes="-NE-") + poster_theme
+ggsave("figs/poster/map_v2.png", p, height=8, width=4.25, dpi=300)  
 
 
 
@@ -139,7 +148,7 @@ bind_rows(tibble(distr="Frechet: >0",
   labs(x="ln(Phytoplankton)", y="count") +
   theme_classic() + poster_theme +
   theme(legend.position=c(0.8, 0.8))
-ggsave("figs\\poster\\distr_frechet.png", height=5, width=7, dpi=300)  
+ggsave("figs/poster/distr_frechet.png", height=5, width=7, dpi=300)  
 
 
 
@@ -158,7 +167,7 @@ tibble(x=seq(-3,3,length.out=1e4),
   scale_fill_manual(values=tl.col, guide="none") +
   labs(x=expression(italic(tilde(y))~~plain("(latent)")), y="density") +
   theme_classic() + poster_theme
-ggsave("figs\\poster\\distr_ordinal.png", height=5, width=7, dpi=300)  
+ggsave("figs/poster/distr_ordinal.png", height=5, width=7, dpi=300)  
 
 
 
@@ -183,7 +192,7 @@ tibble(x=seq(-3,3,length.out=1e4),
   scale_fill_manual(values=tl.col, guide="none") +
   labs(x=expression(italic(tilde(y))~~plain("(latent)")), y="density") +
   theme_classic() + poster_theme
-ggsave("figs\\poster\\distr_ordinal_pts.png", height=5, width=7, dpi=300) 
+ggsave("figs/poster/distr_ordinal_pts.png", height=5, width=7, dpi=300) 
 
 y_i <- tribble(
   ~x_min, ~x_25, ~x, ~x_75, ~x_max, ~y,
@@ -208,7 +217,7 @@ tibble(x=seq(-3,3,length.out=1e4),
   scale_fill_manual(values=tl.col, guide="none") +
   labs(x=expression(italic(tilde(y))~~plain("(latent)")), y="density") +
   theme_classic() + poster_theme + coord_flip()
-ggsave("figs\\poster\\distr_ordinal_pts_flip.png", height=7*.8, width=5*.8, dpi=300) 
+ggsave("figs/poster/distr_ordinal_pts_flip.png", height=7*.8, width=5*.8, dpi=300) 
 
 
 
@@ -232,7 +241,7 @@ ggplot(y_tl, aes(pr, fill=tl)) + geom_density(alpha=0.5) +
   theme_classic() + poster_theme +
   scale_x_continuous(breaks=c(0, 0.5, 1)) +
   labs(x="Forecast probability")
-ggsave("figs\\poster\\sim_ordinal_pred.png", height=7, width=3, dpi=300)
+ggsave("figs/poster/sim_ordinal_pred.png", height=7, width=3, dpi=300)
 
 
 
@@ -258,7 +267,7 @@ predPrmax.df %>%
         axis.text=element_text(size=14),
         strip.text.x=element_text(size=14)) +
   coord_flip()
-ggsave("figs\\poster\\forecast_proportions.png", height=3.25, width=14, dpi=300)
+ggsave("figs/poster/forecast_proportions.png", height=3.25, width=14, dpi=300)
 
 predPrmax.df %>%
   full_join(., sp.df) %>%
@@ -274,7 +283,7 @@ predPrmax.df %>%
         strip.text=element_text(face="italic"),
         axis.text=element_text(size=14),
         strip.text.x=element_text(size=12))
-ggsave("figs\\poster\\forecast_proportions_wide.png", height=6, width=7, dpi=300)
+ggsave("figs/poster/forecast_proportions_wide.png", height=6, width=7, dpi=300)
 
 predPrmax.df %>%
   mutate(predRev=factor(predCat, levels=rev(levels(predCat)))) %>%
@@ -293,7 +302,7 @@ predPrmax.df %>%
         plot.title=element_text(size=18),
         strip.text.x=element_text(size=14)) +
   coord_flip()
-ggsave("figs\\poster\\forecast_counts.png", height=3, width=14, dpi=300)
+ggsave("figs/poster/forecast_counts.png", height=3, width=14, dpi=300)
 
 predPrmax.df %>%
   full_join(., sp.df) %>%
@@ -309,7 +318,7 @@ predPrmax.df %>%
         strip.text=element_text(face="italic"),
         axis.text=element_text(size=14),
         strip.text.x=element_text(size=14))
-ggsave("figs\\poster\\forecast_counts_tall.png", height=14, width=3, dpi=300)
+ggsave("figs/poster/forecast_counts_tall.png", height=14, width=3, dpi=300)
 
 predPrmax.df %>%
   full_join(., sp.df) %>%
@@ -325,7 +334,7 @@ predPrmax.df %>%
         strip.text=element_text(face="italic"),
         axis.text=element_text(size=14),
         strip.text.x=element_text(size=16))
-ggsave("figs\\poster\\observed_proportions.png", height=10, width=5.5, dpi=300)
+ggsave("figs/poster/observed_proportions.png", height=10, width=5.5, dpi=300)
 
 
 # Summary percentage correct
@@ -387,7 +396,7 @@ predPrmax.df %>%
 
 obs.df <- sampling.df %>% 
   select(site.id, date, grid, any_of(sp.df$sp)) %>%
-  filter(grid==1) %>%
+  # filter(grid==1) %>%
   pivot_longer(any_of(sp.df$sp), names_to="sp", values_to="N") %>%
   mutate(N.ln=log(N+1)) %>%
   rowwise() %>%
@@ -408,7 +417,7 @@ obs.df %>%
         strip.text.x=element_text(size=14)) +
   labs(x="ln(cells/L)") +
   facet_wrap(~sp_clean, ncol=1, scales="free")
-ggsave("figs\\poster\\observed_data_distr.png", height=12, width=3, dpi=300)
+ggsave("figs/poster/observed_data_distr.png", height=12, width=3, dpi=300)
 
 obs.df %>%
   full_join(., sp.df) %>%
@@ -426,7 +435,7 @@ obs.df %>%
         axis.title=element_text(size=16),
         plot.title=element_text(size=18),
         strip.text.x=element_text(size=14))
-ggsave("figs\\poster\\observed_data_distr2.png", height=3, width=14, dpi=300)
+ggsave("figs/poster/observed_data_distr2.png", height=3, width=14, dpi=300)
 
 obs.df %>%
   group_by(sp, N.cat) %>%
@@ -443,7 +452,7 @@ obs.df %>%
         axis.title=element_blank()) +
   facet_wrap(~sp_clean) +
   coord_polar(theta="y")
-ggsave("figs\\poster\\observed_data_pie.png", height=4, width=5, dpi=300)
+ggsave("figs/poster/observed_data_pie.png", height=4, width=5, dpi=300)
 
 
 predPrmax.df %>%
@@ -461,7 +470,7 @@ predPrmax.df %>%
         axis.title=element_blank()) +
   facet_wrap(~sp_clean) +
   coord_polar(theta="y")
-ggsave("figs\\poster\\forcasted_data_pie.png", height=4, width=5, dpi=300)
+ggsave("figs/poster/forcasted_data_pie.png", height=4, width=5, dpi=300)
 
 
 predPrmax.df %>%
@@ -479,7 +488,7 @@ predPrmax.df %>%
         axis.title=element_blank()) +
   facet_grid(predCat~sp_clean) +
   coord_polar(theta="y")
-ggsave("figs\\poster\\forcasted_byCat_pie.png", height=6, width=6, dpi=300)
+ggsave("figs/poster/forcasted_byCat_pie.png", height=6, width=6, dpi=300)
 
 
 predPrmax.df %>%
@@ -526,7 +535,7 @@ binary.df <- pred.df %>%
 
 roc.ls <- map(binary.df, ~pROC::roc(.x$N.catF ~ .x$prob))
 
-png("figs\\poster\\roc.png", height=4.25, width=4, units="in", res=300)
+png("figs/poster/roc.png", height=4.25, width=4, units="in", res=300)
 plot(NA, NA, xlim=c(0, 1), ylim=c(0, 1), xlab="", ylab="", axes=F)
 axis(side=1, at=c(0, 0.5, 1))
 axis(side=2, at=c(0, 0.5, 1))
@@ -545,13 +554,13 @@ map(roc.ls, ~.x$auc)
 
 # covariates --------------------------------------------------------------
 
-out.ls <- dir("out\\fullFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
-out.ls <- dir("out\\initFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
-out.ls <- dir("out\\weekFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
+out.ls <- dir("out/fullFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
+out.ls <- dir("out/initFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
+out.ls <- dir("out/weekFitFull", "ordinal.*rds", full.names=T) %>% map(readRDS)
 
 conditional_effects(out.ls[[2]])
 
-full.df <- read_csv("out\\fullFit_alexandrium_sp_data.csv")
+full.df <- read_csv("out/fullFit_alexandrium_sp_data.csv")
 
 eff.ls <- vector("list", 5)
 for(i in 1:5) {
@@ -571,9 +580,9 @@ for(i in 1:5) {
            pred_sp=sp.df$sp[i])
 }
 eff.df <- do.call('rbind', eff.ls) 
-saveRDS(eff.df, "out\\fullFitFull_all.rds")
+saveRDS(eff.df, "out/fullFitFull_all.rds")
 
-eff.df <- readRDS("out\\fullFit_all.rds")
+eff.df <- readRDS("out/fullFit_all.rds")
 eff.max <- eff.df %>% 
   pivot_longer(contains("prmax"), 
                names_to="predCat", values_to="prob") %>%
@@ -684,7 +693,7 @@ pred.df %>%
         axis.title.x=element_blank(),
         plot.title=element_text(size=20),
         strip.text.x=element_text(size=16))
-ggsave("figs\\poster\\sample_timeseries.png", height=4, width=8, dpi=300)
+ggsave("figs/poster/sample_timeseries.png", height=4, width=8, dpi=300)
 
 predPrmax.df %>%
   group_by(sp, site.id) %>%
