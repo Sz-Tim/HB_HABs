@@ -32,6 +32,17 @@ data.df <- dir("out/test_full", "dataset.*csv", full.names=T) %>%
 
 # TODO: Calculate LL using cross-validated runs, k=nYears[fit
 
+cv.df <- map_dfr(dir("out/test_full/", "^CV.*csv"), 
+                 ~read_csv(glue("out/test_full/{.x}"), show_col_types=F) %>%
+                   select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
+                   mutate(month=lubridate::month(date), 
+                          species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5)))
+LL.cv <- cv.df %>% 
+  group_by(covarSet, species) %>% 
+  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
+  ungroup
+
 fit.df <- map_dfr(dir("out/test_full/", "^fit.*csv"), 
               ~read_csv(glue("out/test_full/{.x}"), show_col_types=F) %>%
                 select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
