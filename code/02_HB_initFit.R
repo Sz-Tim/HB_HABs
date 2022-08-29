@@ -353,33 +353,27 @@ for(i in seq_along(covariate_sets)) {
       cv.bern01 <- brm(form_01, data=cv_train.df %>% filter(Nbloom1==0),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bern01_{i.name}_{target}"))
+                       control=ctrl, chains=chains, cores=chains)
       cv.bernP01 <- brm(s_form_bern.p, data=cv_train.df %>% filter(Nbloom1==0), 
                         family=bernoulli("probit"), prior=s_priors.p, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernP01_{i.name}_{target}"))
+                        control=ctrl, chains=chains, cores=chains)
       cv.bernLP01 <- brm(s_form_bern.LP, data=cv_train.df %>% filter(Nbloom1==0), 
                          family=bernoulli("probit"), prior=s_priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}bernLP01_{i.name}_{target}"))
+                         control=ctrl, chains=chains, cores=chains)
       cv.bern11 <- brm(form_bern, data=cv_train.df %>% filter(Nbloom1==1),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bern11_{i.name}_{target}"))
+                       control=ctrl, chains=chains, cores=chains)
       cv.bernP11 <- brm(s_form_bern.p, data=cv_train.df %>% filter(Nbloom1==1), 
                         family=bernoulli("probit"), prior=s_priors.p, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernP11_{i.name}_{target}"))
+                        control=ctrl, chains=chains, cores=chains)
       cv.bernLP11 <- brm(s_form_bern.LP, data=cv_train.df %>% filter(Nbloom1==1), 
                          family=bernoulli("probit"), prior=s_priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}bernLP11_{i.name}_{target}"))
+                         control=ctrl, chains=chains, cores=chains)
       
       # RF
       rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s)
