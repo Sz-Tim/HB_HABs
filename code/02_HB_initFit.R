@@ -428,7 +428,7 @@ for(i in seq_along(covariate_sets)) {
       ) %>%
         mutate(covarSet=i.name)
     }
-    cv_pred %>% do.call('rbind') %>%
+    cv_pred %>% do.call('rbind', .) %>%
       write_csv(glue("out{sep}test_full{sep}CV_{i.name}_{target}.csv"))
     
     # Full fit for predictions
