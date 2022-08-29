@@ -376,29 +376,32 @@ for(i in seq_along(covariate_sets)) {
                                file=glue("out{sep}test_full{sep}bernLP11_{i.name}_{target}"))
     
     # RF
-    rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s, covars)
-    train.rf <- train.df %>% mutate(Nbloom=factor(Nbloom)) %>%
-      select(one_of(rf_vars)) %>% as.data.frame()
-    train.rf01 <- train.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
-      filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% as.data.frame()
-    train.rf11 <- train.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
-      filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% as.data.frame()
-    test.rf <- test.df %>% mutate(Nbloom=factor(Nbloom)) %>%
-      select(one_of(rf_vars)) %>% as.data.frame()
-    test.rf01 <- test.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
-      filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% as.data.frame()
-    test.rf11 <- test.df %>% mutate(Nbloom=factor(Nbloom)) %>% 
-      filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% as.data.frame()
+    rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s)
+    train.rf <- train.df %>% select(one_of(rf_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+      as.data.frame()
+    train.rf01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+      as.data.frame()
+    train.rf01 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+      as.data.frame()
+    test.rf <- test.df %>% select(one_of(rf_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+      as.data.frame()
+    test.rf01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+      as.data.frame()
+    test.rf01 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+      as.data.frame()
     
-    rf <- randomForest(Nbloom ~ ., data=train.rf, 
-                       xtest=test.rf[,-1], ytest=test.rf[,1],
-                       proximity=T, keep.forest=T)
-    rf.01 <- randomForest(Nbloom ~ ., data=train.rf01, 
-                          xtest=test.rf01[,-1], ytest=test.rf01[,1], 
-                          proximity=T, keep.forest=T)
-    rf.11 <- randomForest(Nbloom ~ ., data=train.rf11, 
-                          xtest=test.rf11[,-1], ytest=test.rf11[,1], 
-                          proximity=T, keep.forest=T)
+    rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F)
+    rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F)
+    rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F)
+    saveRDS(rf, glue("out{sep}test_full{sep}rf_{i.name}_{target}.rds"))
+    saveRDS(rf.01, glue("out{sep}test_full{sep}rf01_{i.name}_{target}.rds"))
+    saveRDS(rf.11, glue("out{sep}test_full{sep}rf11_{i.name}_{target}.rds"))
     
     # Fitted
     fit.ord <- posterior_epred(out.ord[[sp]])
@@ -460,12 +463,13 @@ for(i in seq_along(covariate_sets)) {
         mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
                ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
                ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
-               rf_mnpr=rf$test$votes[,2]),
+               rf_mnpr=predict(rf, newdata=test.rf, type="prob")[,2]),
       tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
              bern_mnpr=c(colMeans(pred.bern01), colMeans(pred.bern11)),
              bernP_mnpr=c(colMeans(pred.bernP01), colMeans(pred.bernP11)),
              bernLP_mnpr=c(colMeans(pred.bernLP01), colMeans(pred.bernLP11)),
-             rf_split_mnpr=c(rf.01$test$votes[,2], rf.11$test$votes[,2]))
+             rf_split_mnpr=c(predict(rf.01, newdata=test.rf01, type="prob")[,2], 
+                             predict(rf.11, newdata=test.rf11, type="prob")[,2]))
     ) %>%
       mutate(covarSet=i.name)
     
