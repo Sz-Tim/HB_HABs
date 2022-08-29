@@ -225,3 +225,12 @@ partialPlot(rf, train.rf, o2_wk, "1")
 partialPlot(rf, train.rf, wind_L_wk, "1")
 partialPlot(rf, train.rf, attn_wk, "1")
 partialPlot(rf, train.rf, po4_wk, "1")
+
+
+
+top10 <- importance(rf) %>% as_tibble(rownames="par") %>% 
+  arrange(desc(MeanDecreaseGini)) %>% slice_head(n=10)
+
+for(param in 1:10) {
+  partialPlot(rf, train.rf, top10$par[param], "1", main=top10$par[param])
+}
