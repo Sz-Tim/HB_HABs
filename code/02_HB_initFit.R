@@ -396,9 +396,9 @@ for(i in seq_along(covariate_sets)) {
         mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
         as.data.frame()
       
-      rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F)
-      rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F)
-      rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F)
+      rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F, ntree=1000)
       
       # Cross-validation predictions
       cv_test.df01 <- cv_test.df %>% filter(Nbloom1==0) %>% droplevels
