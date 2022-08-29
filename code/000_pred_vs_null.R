@@ -10,10 +10,7 @@ library(lubridate)
 library(brms)
 theme_set(theme_bw())
 
-# testing simple idea of spatially varying effects
-species <- str_sub(dir("out/test_full", "dataset"), 9, -5)
-species <- unique(str_sub(str_split_fixed(dir("out/test_full", "dataset"), "_", 3)[,3], 1, -5))
-
+species <- str_sub(dir("out/test_full", "dataset_all"), 9, -5)
 
 data.df <- dir("out/test_full", "dataset.*csv", full.names=T) %>% 
   map_dfr(~read_csv(.x) %>%
@@ -36,7 +33,7 @@ data.df <- dir("out/test_full", "dataset.*csv", full.names=T) %>%
 # TODO: Calculate LL using cross-validated runs, k=nYears[fit
 
 fit.df <- map_dfr(dir("out/test_full/", "^fit.*csv"), 
-              ~read_csv(glue("out/test_full/{.x}")) %>%
+              ~read_csv(glue("out/test_full/{.x}"), show_col_types=F) %>%
                 select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
                 mutate(month=lubridate::month(date), 
                        species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5)))
@@ -750,7 +747,7 @@ pred.df %>%
 
 
 
-binary.ls <- pred.df %>% filter(Nbloom1==0) %>%
+binary.ls <- pred.df %>% ungroup %>% filter(covarSet=="all") %>% #filter(Nbloom1==0) %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   select(obsid, species, Nbloom, model, pred) %>%
   group_by(model) %>%
@@ -764,7 +761,7 @@ roc.ls <- map_depth(binary.ls, 2,
 
 for(i in 1:5) {
   par(mfrow=c(1,1))
-  png(glue("figs/performance/0x_ROC_{species[i]}.png"), width=5, height=5, res=300, units="in")
+  png(glue("figs/performance/ROC_{species[i]}.png"), width=5, height=5, res=300, units="in")
   plot(NA, NA, xlim=c(0, 1), ylim=c(0, 1),
        xlab="1 - Specificity", ylab="Sensitivity", axes=F, main=species[i])
   axis(side=1, at=c(0, 0.5, 1))
@@ -781,13 +778,22 @@ for(i in 1:5) {
 
 auc.df <- map_depth(roc.ls, 2, ~.x$auc) %>% 
   map_dfc(~do.call(c, .x)) %>%
-  mutate(species=species) %>%
+  mutate(species=str_remove(species, "all_")) %>%
   pivot_longer(-species, names_to="model", values_to="AUC") %>%
-  mutate(model=factor(model, levels=names(mod_cols)))
-write_csv(auc.df, glue("figs/performance/auc_0x.csv"))
+  mutate(model=factor(model, levels=names(mod_cols)))  %>%
+  mutate(modType=case_when(grepl("mo|xy|mean", model) ~ "Null",
+                           grepl("LP", model) ~ "Laplace",
+                           grepl("rf", model) ~ "RF",
+                           model %in% c("bern", "ord") ~ "intrct",
+                           model %in% c("bernP", "ordP") ~ "indVar",
+                           grepl("avg", model) ~ "ens")) %>%
+  mutate(modType=factor(modType, levels=c("Null", "RF",  "intrct", "Laplace", "indVar", "ens")))
+write_csv(auc.df, glue("figs/performance/auc_all.csv"))
 
 ggplot(auc.df, aes(model, AUC, colour=species, group=species)) + geom_line() + 
-  scale_colour_manual(values=sams.cols)
+  scale_colour_manual(values=sams.cols) + 
+  facet_grid(.~modType, scales="free_x", space="free_x") + 
+  theme(legend.position="bottom") + ylim(0.5, 1)
 ggplot(auc.df, aes(species, AUC, colour=model, group=model)) + geom_line() + 
   scale_colour_manual(values=mod_cols)
 par(mfrow=c(1,1))
@@ -925,12 +931,12 @@ for(i in seq_along(pred.ls)) {
 pred.smooths <- do.call(rbind, pred.ls)
 ggplot(pred.smooths, aes(yday, slope*p, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var) +
+  geom_line(alpha=0.25) + facet_wrap(~var, ncol=6) +
   # scale_colour_manual(values=sams.cols) +
-  scale_colour_brewer(type="qual", palette=2) +
+  scale_colour_brewer("", type="qual", palette=2) +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
-  theme(panel.grid=element_blank())
-ggsave("figs/smooths_all.jpg", width=7, height=6)
+  theme(panel.grid=element_blank(), legend.position="bottom")
+ggsave("figs/smooths_all.jpg", width=9, height=5)
 
 
 
