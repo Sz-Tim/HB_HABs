@@ -389,7 +389,16 @@ for(i in seq_along(covariate_sets)) {
       train.rf01 <- cv_train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
         mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
         as.data.frame()
-      train.rf01 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+      train.rf11 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+        as.data.frame()
+      test.rf <- cv_test.df %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+        as.data.frame()
+      test.rf01 <- cv_test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
+        as.data.frame()
+      test.rf11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
         mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
         as.data.frame()
       
@@ -488,7 +497,7 @@ for(i in seq_along(covariate_sets)) {
     train.rf01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
       mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
       as.data.frame()
-    train.rf01 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+    train.rf11 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
       mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
       as.data.frame()
     test.rf <- test.df %>% select(one_of(rf_vars)) %>% 
@@ -497,7 +506,7 @@ for(i in seq_along(covariate_sets)) {
     test.rf01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
       mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
       as.data.frame()
-    test.rf01 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+    test.rf11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
       mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
       as.data.frame()
     
