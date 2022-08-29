@@ -179,7 +179,7 @@ for(i in seq_along(covariate_sets)) {
   s_flist.LP <- c(
     map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
     map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
-    map(1, ~"bIntercept~1")
+    map(1, ~"bIntercept~1 + (1|siteid)")
   )
   s_form_ord.LP <- bf(
     glue("NcatNum | thres(3) ~ 1*bIntercept",
@@ -201,7 +201,7 @@ for(i in seq_along(covariate_sets)) {
     map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
     map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
     map(s_p, ~as.formula(paste0(.x, "~ 1"))),
-    map(1, ~"bIntercept~1")
+    map(1, ~"bIntercept~1 + (1|siteid)")
   )
   s_form_ord.p <- bf(
     glue("NcatNum | thres(3) ~ 1*bIntercept",
@@ -219,8 +219,14 @@ for(i in seq_along(covariate_sets)) {
     flist=s_flist.p, nl=T)
   
   # Priors
-  priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
-              prior(normal(0, 0.1), class="sd"))
+  if(i.name=="null") { 
+    priors <- c(prior(normal(0, 1), class="Intercept"),
+                prior(normal(0, 0.1), class="sd"))
+  } else {
+    priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
+                prior(normal(0, 1), class="Intercept"),
+                prior(normal(0, 0.1), class="sd"))
+  }
   s_priors.LP <- c(
     prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
     map(covar_s, 
@@ -228,7 +234,8 @@ for(i in seq_along(covariate_sets)) {
            prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
       do.call('c', .), 
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
-      do.call('c', .)
+      do.call('c', .),
+    prior(normal(0, 0.1), class="sd")
   )
   s_priors.p <- c(
     prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
@@ -238,7 +245,8 @@ for(i in seq_along(covariate_sets)) {
            prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
       do.call('c', .),
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
-      do.call('c', .)
+      do.call('c', .),
+    prior(normal(0, 0.1), class="sd")
   )
   
   
