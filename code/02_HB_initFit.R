@@ -131,13 +131,13 @@ covar_s.all <- c(
 
 
 covariate_sets <- list(
+  null="NA",
   date="^yday",
   autoreg="^N|mo",
   external="fetch|influx|water|wind",
   local="temp|salinity|shortwave|precip|km",
   cprn="attn|chl|dino|o2|ph|po4",
-  all=".",
-  null="NA"
+  all="."
 )
 
 #TODO: External, local with WeStCOMS2 = all sites
