@@ -221,32 +221,32 @@ for(i in seq_along(covariate_sets)) {
   # Priors
   if(i.name=="null") { 
     priors <- c(prior(normal(0, 1), class="Intercept"),
-                prior(normal(0, 0.1), class="sd"))
+                prior(normal(0, 0.5), class="sd"))
   } else {
     priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
                 prior(normal(0, 1), class="Intercept"),
-                prior(normal(0, 0.1), class="sd"))
+                prior(normal(0, 0.5), class="sd"))
   }
   s_priors.LP <- c(
     prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
     map(covar_s, 
         ~c(prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x)),
+           prior_string("normal(0,.5)", class="sd", nlpar=paste0("b", .x), lb=0),
            prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
       do.call('c', .), 
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
-      do.call('c', .),
-    prior(normal(0, 0.1), class="sd")
+      do.call('c', .)
   )
   s_priors.p <- c(
     prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
     map(covar_s, 
         ~c(prior_string("beta(0.1,1)", nlpar=paste0("p", .x), lb=0, ub=1),
            prior_string("normal(0,1)", class="b", nlpar=paste0("b", .x)),
+           prior_string("normal(0,.5)", class="sd", nlpar=paste0("b", .x), lb=0),
            prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
       do.call('c', .),
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
-      do.call('c', .),
-    prior(normal(0, 0.1), class="sd")
+      do.call('c', .)
   )
   
   
