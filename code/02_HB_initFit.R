@@ -82,6 +82,18 @@ connect.df <- read_csv(glue("data{sep}connectivity_5e3parts.csv")) %>%
   mutate(across(starts_with("influx"), ~log(.x+1)))
 cprn.df <- read_csv("data/cprn.csv") %>%
   select(site.id, date, attn_wk, chl_wk, dino_wk, o2_wk, ph_wk, po4_wk)
+site.100k <-  read_csv("data/fsa_site_pairwise_distances.csv") %>% 
+  bind_rows(tibble(origin=unique(.$origin), 
+                   destination=unique(.$origin), 
+                   distance=0)) %>%
+  filter(distance < 100e3) %>% 
+  select(-distance) %>% 
+  group_by(origin) %>% 
+  nest(data=destination) %>%
+  mutate(destination_c=c(data[[1]])) %>% 
+  select(-data) %>%
+  ungroup
+
 # >0.85 cor(res,time) = temp, salinity
 # >0.85 cor(res) = short_wave, km, precip, wind, windDir
 # >0.85 cor(time) = water
@@ -95,24 +107,26 @@ covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
             "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk")
 covar_int.all <- c(
   "ydayCos", "ydaySin",
-  paste0(c("tempLwk", "salinityLwk", "shortwaveLwk",
+  paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
            "windVel", "waterVelL", "waterVelR",
            "influxwk", "fetch",
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
            "mo(NcatF1)", "mo(NcatF2)",
-           "NlnWt1", "NlnWt2"), 
+           "NlnWt1", "NlnWt2",
+           "NlnRAvg1", "NlnRAvg2"), 
          ":ydayCos:ydaySin"),
   "mo(NcatF1):mo(NcatF2)",
   paste0(c("windVel", "waterVelL", "waterVelR"), 
          ":fetch")
 )
 covar_s.all <- c(
-  "tempLwk", "salinityLwk", "shortwaveLwk",
+  "tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
   "windVel", "waterVelL", "waterVelR",
   "influxwk", "fetch",
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
   "Nbloom1", "Nbloom2",
-  "NlnWt1", "NlnWt2"
+  "NlnWt1", "NlnWt2",
+  "NlnRAvg1", "NlnRAvg2"
 )
 
 
@@ -120,13 +134,13 @@ covariate_sets <- list(
   date="^yday",
   autoreg="^N|mo",
   external="fetch|influx|water|wind",
-  local="temp|salinity|shortwave",
+  local="temp|salinity|shortwave|precip|km",
   cprn="attn|chl|dino|o2|ph|po4",
   all=".",
   null="NA"
 )
 
-#TODO: External, local, cprn with WeStCOMS2 = all sites
+#TODO: External, local with WeStCOMS2 = all sites
 
 
 for(i in seq_along(covariate_sets)) {
@@ -282,13 +296,33 @@ for(i in seq_along(covariate_sets)) {
              starts_with("N"), starts_with("date_"), starts_with("yday"),
              one_of(covars, covar_int, covar_s, covar_date)) %>%
       filter(complete.cases(.)) %>%
-      mutate(covarSet=i.name)
+      mutate(covarSet=i.name,
+             NlnRAvg1=NA,
+             NlnRAvg2=NA) %>%
+      filter(!siteid %in% c(70, 74, 75, 80, 88))
+    # TODO: I don't remember why these sites are excluded
+    
+    # TODO: If statement for covariates. Or really just clean this up. It's very slow.
+    if("NlnRAvg1" %in% covar_s) {
+      for(j in 1:nrow(target.df)) {
+        site_j <- target.df$siteid[j]
+        date_j <- target.df$date[j]
+        target_wk <- target.df %>% select(siteid, date, Nln1, Nln2) %>%
+          filter(siteid %in% site.100k$destination_c[site.100k$origin==site_j][[1]]) %>%
+          filter(date <= date_j & date > date_j-7) 
+        target.df$NlnRAvg1[j] <- mean(target_wk$Nln1)
+        target.df$NlnRAvg2[j] <- mean(target_wk$Nln2)
+        if(j %% 100 == 0) {cat(j, "of", nrow(target.df), "\n")}
+      } 
+    }
     
     write_csv(target.df, glue("out{sep}test_full{sep}dataset_{i.name}_{target}.csv"))
     
-    train.df <- target.df %>% filter(year <= 2019)
-    test.df <- target.df %>% filter(year > 2019)
+    train.df <- target.df %>% filter(year <= 2017)
+    test.df <- target.df %>% filter(year > 2017)
     bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
+    
+    # TODO: Cross-validation to calculate LL
     
     out.ord[[sp]] <- brm(form_ordinal, data=train.df,
                          family=cumulative("probit"), prior=priors, 
