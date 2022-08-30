@@ -9,7 +9,7 @@
 
 # set up ------------------------------------------------------------------
 
-pkgs <- c("tidyverse", "lubridate", "glue", "LaplacesDemon", "brms", 
+pkgs <- c("tidyverse", "lubridate", "glue", "brms", 
           "randomForest", "caret")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
@@ -143,7 +143,7 @@ covariate_sets <- list(
 #TODO: External, local with WeStCOMS2 = all sites
 
 
-for(i in seq_along(covariate_sets)) {
+for(i in 3:length(covariate_sets)) {
   i.name <- names(covariate_sets)[i]
   i.covs <- covariate_sets[[i]]
   covars <- covars.all[grepl(i.covs, str_remove_all(covars.all, "\\.|_"))]
@@ -290,7 +290,7 @@ for(i in seq_along(covariate_sets)) {
       full_join(connect.df) %>%
       full_join(cprn.df) %>%
       mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>% # -1 = toward shore, 1 = away from shore
-      mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), CenterScale)) %>%
+      mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), LaplacesDemon::CenterScale)) %>%
       arrange(site.id, date) %>%
       rename_with(~str_remove_all(.x, "\\.|_")) %>%
       mutate(ydaySC=ydaySin*ydayCos,
