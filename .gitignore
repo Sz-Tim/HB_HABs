@@ -8,6 +8,10 @@
 # User-specific files
 .Ruserdata
 
+# Big temp files, etc
+/particle_tracking/out/
+/data/hydro_*
+
 # Example code in package build process
 *-Ex.R
 
