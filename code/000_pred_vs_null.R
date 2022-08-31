@@ -36,64 +36,63 @@ cv.df <- map_dfr(dir("out/test_full/", "^CV.*csv"),
                  ~read_csv(glue("out/test_full/{.x}"), show_col_types=F) %>%
                    select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
                    mutate(month=lubridate::month(date), 
-                          species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5)))
-LL.cv <- cv.df %>% 
-  group_by(covarSet, species) %>% 
-  summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
-  ungroup
-
+                          species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5),
+                          # some RF pr == 0 | 1
+                          across(ends_with("mnpr"), ~pmin(pmax(.x, 1e-6), 1-1e-6))))
 fit.df <- map_dfr(dir("out/test_full/", "^fit.*csv"), 
               ~read_csv(glue("out/test_full/{.x}"), show_col_types=F) %>%
                 select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
                 mutate(month=lubridate::month(date), 
-                       species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5)))
-LL.tot <- fit.df %>% 
+                       species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5),
+                       across(ends_with("mnpr"), ~pmin(pmax(.x, 1e-6), 1-1e-6))))
+pred.df <- map_dfr(dir("out/test_full/", "^pred.*csv"), 
+                   ~read_csv(glue("out/test_full/{.x}")) %>%
+                     select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
+                     mutate(month=lubridate::month(date), 
+                            species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5),
+                            across(ends_with("mnpr"), ~pmin(pmax(.x, 1e-6), 1-1e-6))))
+LL.tot <- cv.df %>% 
   group_by(covarSet, species) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
   ungroup
-LL.mo <- fit.df %>% 
+LL.mo <- cv.df %>% 
   group_by(covarSet, species, month) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
   ungroup
-LL.st <- fit.df %>% 
+LL.st <- cv.df %>% 
   group_by(covarSet, species, siteid) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
   ungroup
-LL.B1 <- fit.df %>% 
+LL.B1 <- cv.df %>% 
   group_by(covarSet, species, Nbloom1) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
   ungroup
-# LL.moB1 <- fit.df %>% 
+# LL.moB1 <- cv.df %>% 
 #   group_by(covarSet, species, month, Nbloom1) %>% 
 #   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
 #   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
 #   ungroup
-# LL.stB1 <- fit.df %>% 
+# LL.stB1 <- cv.df %>% 
 #   group_by(covarSet, species, siteid, Nbloom1) %>% 
 #   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
 #   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
 #   ungroup
-# LL.moSt <- fit.df %>% 
+# LL.moSt <- cv.df %>% 
 #   group_by(covarSet, species, month, siteid) %>% 
 #   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
 #   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
 #   ungroup
-# LL.moStB1 <- fit.df %>% 
+# LL.moStB1 <- cv.df %>% 
 #   group_by(covarSet, species, month, siteid, Nbloom1) %>% 
 #   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
 #   mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>%
 #   ungroup
 
-pred.df <- map_dfr(dir("out/test_full/", "^pred.*csv"), 
-                  ~read_csv(glue("out/test_full/{.x}")) %>%
-                    select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
-                    mutate(month=lubridate::month(date), 
-                           species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5)))
+
 
 pred.ens <- pred.df %>% 
   left_join(LL.tot) %>% rowwise() %>%
@@ -995,5 +994,45 @@ ggplot(pred.smooths, aes(yday, slope*p, colour=covarSet, group=paste(covarSet, s
   geom_line(alpha=0.25) + facet_wrap(~var) +
   # scale_colour_manual(values=sams.cols) +
   scale_colour_brewer(type="qual", palette=2) +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid=element_blank())
+
+
+
+data.alex <- read_csv("out/test_full/dataset_autoreg_alexandrium_sp.csv")
+out.p <- dir("out/test_full", "P.*autoreg_alexandrium_sp.rds", full.names=T) %>%
+  map(readRDS) %>% setNames(c("bern01", "bern11", "ord"))
+p.effects <- c('Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
+p.all <- map_dfr(out.p, ~fixef(.x) %>% 
+                   as_tibble(rownames="var") %>%
+                   filter(grepl("^p", var)))
+library(bayesplot)
+imap(out.p, ~mcmc_intervals(.x, regex_pars="^b_p.*Intercept") + ggtitle(.y))
+
+smooths.df <- bind_cols(expand_grid(yday=seq(1, 365, length.out=52),
+                                    siteid=unique(data.alex$siteid)) %>%
+                          mutate(ydayCos=cos(yday*2*pi/365),
+                                 ydaySin=sin(yday*2*pi/365),
+                                 ydaySC=ydayCos*ydaySin),
+                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
+                          pivot_wider(names_from="var", values_from="val"))
+pred.ls <- vector("list", length(out.p)) %>% setNames(names(out.p))
+for(i in seq_along(pred.ls)) {
+  pred.ls[[i]] <- map_dfr(p.effects, 
+                          ~smooths.df %>%
+                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                  allow_new_levels=T,
+                                                                  nlpar=paste0("b", .x))),
+                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                              allow_new_levels=T,
+                                                              nlpar=paste0("p", .x))),
+                                   var=.x,
+                                   model=names(out.p)[i]))
+}
+pred.smooths <- do.call(rbind, pred.ls)
+ggplot(pred.smooths, aes(yday, slope*p, colour=model, group=paste(model, siteid))) + 
+  geom_hline(yintercept=0, colour="grey30", linetype=2) +
+  geom_line(alpha=0.25) + facet_wrap(~var) +
+  scale_colour_manual(values=c("steelblue3", "skyblue", "olivedrab")) +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid=element_blank())
