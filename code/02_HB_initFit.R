@@ -17,10 +17,10 @@ walk(dir("code", "*00_fn", full.names=T), source)
 
 # Model details
 ctrl <- list(adapt_delta=0.95, max_treedepth=20)
-chains <- 4
-iter <- 2000
+chains <- 1
+iter <- 100
 warmup <- iter/2
-refresh <- 50
+refresh <- 10
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
@@ -150,75 +150,13 @@ for(i in 3:length(covariate_sets)) {
   covar_int <- grep(i.covs, covar_int.all, value=T)
   covar_s <- grep(i.covs, covar_s.all, value=T)
   covar_date <- grep(i.covs, c("ydayCos", "ydaySin"), value=T)
-  # Interaction
-  form_ordinal <- bf(glue("NcatNum | thres(3) ~ 1 + ", 
-                          "{paste(covar_int, collapse='+')}", 
-                          "{ifelse(length(covar_int) > 0, '+', '')}",
-                          "(1",
-                          "{ifelse(length(covar_int) > 0, '+', '')}",
-                          "{paste(covar_int, collapse='+')}|siteid)"))
-  form_bern <- bf(glue("Nbloom ~ 1 + ", 
-                       "{paste(covar_int, collapse='+')}", 
-                       "{ifelse(length(covar_int) > 0, '+', '')}",
-                       "(1",
-                       "{ifelse(length(covar_int) > 0, '+', '')}",
-                       "{paste(covar_int, collapse='+')}|siteid)"))
-  form_bern_noCatF <- bf(glue("Nbloom ~ 1 + ", 
-                       "{paste(grep('catF1', covar_int, value=T, invert=T), collapse='+')}", 
-                       "{ifelse(length(grep('catF1', covar_int, value=T, invert=T)) > 0, '+', '')}",
-                       "(1",
-                       "{ifelse(length(grep('catF1', covar_int, value=T, invert=T)) > 0, '+', '')}",
-                       "{paste(grep('catF1', covar_int, value=T, invert=T), collapse='+')}|siteid)"))
   
   # Smoothers
   s_b <- glue("b{covar_s}") 
   s_yday <- glue("b{covar_date}")
   s_p <- glue("p{covar_s}")
   
-  # Laplace priors only
-  s_flist.LP <- c(
-    map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
-    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
-    map(1, ~"bIntercept~1 + (1|siteid)")
-  )
-  s_form_ord.LP <- bf(
-    glue("NcatNum | thres(3) ~ 1*bIntercept",
-         "{ifelse(length(s_yday)>0, '+', '')}",
-         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0, '+', '')}",
-         "{paste(s_b, covar_s, sep='*', collapse='+')}"),
-    flist=s_flist.LP, nl=T)
-  s_form_bern.LP <- bf(
-    glue("Nbloom ~ 1*bIntercept",
-         "{ifelse(length(s_yday)>0, '+', '')}",
-         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0, '+', '')}",
-         "{paste(s_b, covar_s, sep='*', collapse='+')}"),
-    flist=s_flist.LP, nl=T)
-  
-  # Indicator variable: p * b * X
-  s_flist.p <- c(
-    map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
-    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
-    map(s_p, ~as.formula(paste0(.x, "~ 1"))),
-    map(1, ~"bIntercept~1 + (1|siteid)")
-  )
-  s_form_ord.p <- bf(
-    glue("NcatNum | thres(3) ~ 1*bIntercept",
-         "{ifelse(length(s_yday)>0, '+', '')}",
-         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0, '+', '')}",
-         "{paste(s_p, s_b, covar_s, sep='*', collapse='+')}"),
-    flist=s_flist.p, nl=T)
-  s_form_bern.p <- bf(
-    glue("Nbloom ~ 1*bIntercept",
-         "{ifelse(length(s_yday)>0, '+', '')}",
-         "{paste(s_yday, covar_date, sep='*', collapse='+')}",
-         "{ifelse(length(s_b)>0, '+', '')}",
-         "{paste(s_p, s_b, covar_s, sep='*', collapse='+')}"),
-    flist=s_flist.p, nl=T)
-  
-  # Priors
+  # Interaction priors
   if(i.name=="null") { 
     priors <- c(prior(normal(0, 1), class="Intercept"),
                 prior(normal(0, 0.5), class="sd"))
@@ -227,7 +165,14 @@ for(i in 3:length(covariate_sets)) {
                 prior(normal(0, 1), class="Intercept"),
                 prior(normal(0, 0.5), class="sd"))
   }
-  s_priors.LP <- c(
+  
+  # Laplace priors only
+  flist.LP <- c(
+    map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+    map(1, ~"bIntercept~1 + (1|siteid)")
+  )
+  priors.LP <- c(
     prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
     map(covar_s, 
         ~c(prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x)),
@@ -237,7 +182,15 @@ for(i in 3:length(covariate_sets)) {
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
       do.call('c', .)
   )
-  s_priors.p <- c(
+  
+  # Indicator variable: p * b * X
+  flist.P <- c(
+    map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+    map(s_p, ~as.formula(paste0(.x, "~ 1"))),
+    map(1, ~"bIntercept~1 + (1|siteid)")
+  )
+  priors.P <- c(
     prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
     map(covar_s, 
         ~c(prior_string("beta(0.1,1)", nlpar=paste0("p", .x), lb=0, ub=1),
@@ -333,45 +286,56 @@ for(i in 3:length(covariate_sets)) {
       cv_train.df <- train.df %>% filter(year != yr)
       cv_test.df <- train.df %>% filter(year == yr)
       
-      cv.ord <- brm(form_ordinal, data=cv_train.df,
+      # Formulas with interactions: errors if missing NcatF levels
+      form_ord <- makeFormula(cv_train.df, covar_int, "NcatNum | thres(3)")
+      form_01 <- makeFormula(filter(cv_train.df, Nbloom1==0), covar_int, "Nbloom")
+      form_11 <- makeFormula(filter(cv_train.df, Nbloom1==1), covar_int, "Nbloom")
+      
+      # Smoother formulas
+      form_ordLP <- makeFormula(cv_train.df, covar_s, "NcatNum | thres(3)", covar_date,
+                                flist.LP, list(b=s_b, yday=s_yday, p=NULL))
+      form_bernLP <- makeFormula(cv_train.df, covar_s, "Nbloom", covar_date,
+                                 flist.LP, list(b=s_b, yday=s_yday, p=NULL))
+      form_ordP <- makeFormula(cv_train.df, covar_s, "NcatNum | thres(3)", covar_date,
+                               flist.P, list(b=s_b, yday=s_yday, p=s_p))
+      form_bernP <- makeFormula(cv_train.df, covar_s, "Nbloom", covar_date,
+                                flist.P, list(b=s_b, yday=s_yday, p=s_p))
+      
+      cv.ord <- brm(form_ord, data=cv_train.df,
                     family=cumulative("probit"), prior=priors, 
                     iter=iter, warmup=warmup, refresh=refresh, init=0,
                     control=ctrl, chains=chains, cores=chains)
-      cv.ordP <- brm(s_form_ord.p, data=cv_train.df, 
-                     family=cumulative("probit"), prior=s_priors.p, 
+      cv.ordP <- brm(form_ordP, data=cv_train.df, 
+                     family=cumulative("probit"), prior=priors.P, 
                      iter=iter, warmup=warmup, refresh=refresh, init=0,
                      control=ctrl, chains=chains, cores=chains)
-      cv.ordLP <- brm(s_form_ord.LP, data=cv_train.df, 
-                      family=cumulative("probit"), prior=s_priors.LP, 
+      cv.ordLP <- brm(form_ordLP, data=cv_train.df, 
+                      family=cumulative("probit"), prior=priors.LP, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                       control=ctrl, chains=chains, cores=chains)
-      if(n_distinct(filter(cv_train.df, Nbloom1==0)$NcatF1)==1) {
-        form_01 <- form_bern_noCatF
-      } else {
-        form_01 <- form_bern
-      }
+      
       cv.bern01 <- brm(form_01, data=cv_train.df %>% filter(Nbloom1==0),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains)
-      cv.bernP01 <- brm(s_form_bern.p, data=cv_train.df %>% filter(Nbloom1==0), 
-                        family=bernoulli("probit"), prior=s_priors.p, 
+      cv.bernP01 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==0), 
+                        family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains)
-      cv.bernLP01 <- brm(s_form_bern.LP, data=cv_train.df %>% filter(Nbloom1==0), 
-                         family=bernoulli("probit"), prior=s_priors.LP, 
+      cv.bernLP01 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==0), 
+                         family=bernoulli("probit"), prior=priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
                          control=ctrl, chains=chains, cores=chains)
-      cv.bern11 <- brm(form_bern, data=cv_train.df %>% filter(Nbloom1==1),
+      cv.bern11 <- brm(form_11, data=cv_train.df %>% filter(Nbloom1==1),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains)
-      cv.bernP11 <- brm(s_form_bern.p, data=cv_train.df %>% filter(Nbloom1==1), 
-                        family=bernoulli("probit"), prior=s_priors.p, 
+      cv.bernP11 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==1), 
+                        family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains)
-      cv.bernLP11 <- brm(s_form_bern.LP, data=cv_train.df %>% filter(Nbloom1==1), 
-                         family=bernoulli("probit"), prior=s_priors.LP, 
+      cv.bernLP11 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==1), 
+                         family=bernoulli("probit"), prior=priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
                          control=ctrl, chains=chains, cores=chains)
       
@@ -431,57 +395,69 @@ for(i in 3:length(covariate_sets)) {
     cv_pred %>% do.call('rbind', .) %>%
       write_csv(glue("out{sep}test_full{sep}CV_{i.name}_{target}.csv"))
     
+    
     # Full fit for predictions
-    out.ord <- brm(form_ordinal, data=train.df,
-                         family=cumulative("probit"), prior=priors, 
-                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}ord_{i.name}_{target}"))
-    out.ordP <- brm(s_form_ord.p, data=train.df, 
-                           family=cumulative("probit"), prior=s_priors.p, 
-                           iter=iter, warmup=warmup, refresh=refresh, init=0,
-                           control=ctrl, chains=chains, cores=chains,
-                           file=glue("out{sep}test_full{sep}ordP_{i.name}_{target}"))
-    out.ordLP <- brm(s_form_ord.LP, data=train.df, 
-                            family=cumulative("probit"), prior=s_priors.LP, 
-                            iter=iter, warmup=warmup, refresh=refresh, init=0,
-                            control=ctrl, chains=chains, cores=chains,
-                            file=glue("out{sep}test_full{sep}ordLP_{i.name}_{target}"))
-    if(n_distinct(filter(train.df, Nbloom1==0)$NcatF1)==1) {
-      form_01 <- form_bern_noCatF
-    } else {
-      form_01 <- form_bern
-    }
+    
+    # Formulas with interactions: errors if missing NcatF levels
+    form_ord <- makeFormula(train.df, covar_int, "NcatNum | thres(3)")
+    form_01 <- makeFormula(filter(train.df, Nbloom1==0), covar_int, "Nbloom")
+    form_11 <- makeFormula(filter(train.df, Nbloom1==1), covar_int, "Nbloom")
+    
+    # Smoother formulas
+    form_ordLP <- makeFormula(train.df, covar_s, "NcatNum | thres(3)", covar_date,
+                              flist.LP, list(b=s_b, yday=s_yday, p=NULL))
+    form_bernLP <- makeFormula(train.df, covar_s, "Nbloom", covar_date,
+                               flist.LP, list(b=s_b, yday=s_yday, p=NULL))
+    form_ordP <- makeFormula(train.df, covar_s, "NcatNum | thres(3)", covar_date,
+                             flist.P, list(b=s_b, yday=s_yday, p=s_p))
+    form_bernP <- makeFormula(train.df, covar_s, "Nbloom", covar_date,
+                              flist.P, list(b=s_b, yday=s_yday, p=s_p))
+    
+    out.ord <- brm(form_ord, data=train.df,
+                   family=cumulative("probit"), prior=priors, 
+                   iter=iter, warmup=warmup, refresh=refresh, init=0,
+                   control=ctrl, chains=chains, cores=chains,
+                   file=glue("out{sep}test_full{sep}ord_{i.name}_{target}"))
+    out.ordP <- brm(form_ordP, data=train.df, 
+                    family=cumulative("probit"), prior=priors.P, 
+                    iter=iter, warmup=warmup, refresh=refresh, init=0,
+                    control=ctrl, chains=chains, cores=chains,
+                    file=glue("out{sep}test_full{sep}ordP_{i.name}_{target}"))
+    out.ordLP <- brm(form_ordLP, data=train.df, 
+                     family=cumulative("probit"), prior=priors.LP, 
+                     iter=iter, warmup=warmup, refresh=refresh, init=0,
+                     control=ctrl, chains=chains, cores=chains,
+                     file=glue("out{sep}test_full{sep}ordLP_{i.name}_{target}"))
     out.bern01 <- brm(form_01, data=train.df %>% filter(Nbloom1==0),
-                            family=bernoulli("probit"), prior=priors, 
-                            iter=iter, warmup=warmup, refresh=refresh, init=0,
-                            control=ctrl, chains=chains, cores=chains,
-                            file=glue("out{sep}test_full{sep}bern01_{i.name}_{target}"))
-    out.bernP01 <- brm(s_form_bern.p, data=train.df %>% filter(Nbloom1==0), 
-                              family=bernoulli("probit"), prior=s_priors.p, 
-                              iter=iter, warmup=warmup, refresh=refresh, init=0,
-                              control=ctrl, chains=chains, cores=chains,
-                              file=glue("out{sep}test_full{sep}bernP01_{i.name}_{target}"))
-    out.bernLP01 <- brm(s_form_bern.LP, data=train.df %>% filter(Nbloom1==0), 
-                               family=bernoulli("probit"), prior=s_priors.LP, 
-                               iter=iter, warmup=warmup, refresh=refresh, init=0,
-                               control=ctrl, chains=chains, cores=chains,
-                               file=glue("out{sep}test_full{sep}bernLP01_{i.name}_{target}"))
+                      family=bernoulli("probit"), prior=priors, 
+                      iter=iter, warmup=warmup, refresh=refresh, init=0,
+                      control=ctrl, chains=chains, cores=chains,
+                      file=glue("out{sep}test_full{sep}bern01_{i.name}_{target}"))
+    out.bernP01 <- brm(form_bernP, data=train.df %>% filter(Nbloom1==0), 
+                       family=bernoulli("probit"), prior=priors.P, 
+                       iter=iter, warmup=warmup, refresh=refresh, init=0,
+                       control=ctrl, chains=chains, cores=chains,
+                       file=glue("out{sep}test_full{sep}bernP01_{i.name}_{target}"))
+    out.bernLP01 <- brm(form_bernLP, data=train.df %>% filter(Nbloom1==0), 
+                        family=bernoulli("probit"), prior=priors.LP, 
+                        iter=iter, warmup=warmup, refresh=refresh, init=0,
+                        control=ctrl, chains=chains, cores=chains,
+                        file=glue("out{sep}test_full{sep}bernLP01_{i.name}_{target}"))
     out.bern11 <- brm(form_bern, data=train.df %>% filter(Nbloom1==1),
-                            family=bernoulli("probit"), prior=priors, 
-                            iter=iter, warmup=warmup, refresh=refresh, init=0,
-                            control=ctrl, chains=chains, cores=chains,
-                            file=glue("out{sep}test_full{sep}bern11_{i.name}_{target}"))
-    out.bernP11 <- brm(s_form_bern.p, data=train.df %>% filter(Nbloom1==1), 
-                              family=bernoulli("probit"), prior=s_priors.p, 
-                              iter=iter, warmup=warmup, refresh=refresh, init=0,
-                              control=ctrl, chains=chains, cores=chains,
-                              file=glue("out{sep}test_full{sep}bernP11_{i.name}_{target}"))
-    out.bernLP11 <- brm(s_form_bern.LP, data=train.df %>% filter(Nbloom1==1), 
-                               family=bernoulli("probit"), prior=s_priors.LP, 
-                               iter=iter, warmup=warmup, refresh=refresh, init=0,
-                               control=ctrl, chains=chains, cores=chains,
-                               file=glue("out{sep}test_full{sep}bernLP11_{i.name}_{target}"))
+                      family=bernoulli("probit"), prior=priors, 
+                      iter=iter, warmup=warmup, refresh=refresh, init=0,
+                      control=ctrl, chains=chains, cores=chains,
+                      file=glue("out{sep}test_full{sep}bern11_{i.name}_{target}"))
+    out.bernP11 <- brm(form_bernP, data=train.df %>% filter(Nbloom1==1), 
+                       family=bernoulli("probit"), prior=priors.P, 
+                       iter=iter, warmup=warmup, refresh=refresh, init=0,
+                       control=ctrl, chains=chains, cores=chains,
+                       file=glue("out{sep}test_full{sep}bernP11_{i.name}_{target}"))
+    out.bernLP11 <- brm(form_bernLP, data=train.df %>% filter(Nbloom1==1), 
+                        family=bernoulli("probit"), prior=priors.LP, 
+                        iter=iter, warmup=warmup, refresh=refresh, init=0,
+                        control=ctrl, chains=chains, cores=chains,
+                        file=glue("out{sep}test_full{sep}bernLP11_{i.name}_{target}"))
     
     # RF
     rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s)

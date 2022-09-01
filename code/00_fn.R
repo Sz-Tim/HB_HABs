@@ -35,6 +35,46 @@ clean_fsa <- function(x, v1_end) {
 }
 
 
+
+makeFormula <- function(data.df, covs, resp, covs_date=NULL, flist=NULL, sTerms=NULL) {
+  library(tidyverse); library(brms); library(glue)
+  
+  # Exclude NcatF1, NcatF2 if only one level
+  exclude_F1 <- n_distinct(data.df$NcatF1)==1
+  exclude_F2 <- n_distinct(data.df$NcatF2)==1
+  
+  if(exclude_F1 & exclude_F2) {
+    excl_term <- "catF"
+  } else if(exclude_F1 & !exclude_F2) {
+    excl_term <- "catF1"
+  } else if(!exclude_F1 & exclude_F2) {
+    excl_term <- "catF2"
+  } else {
+    excl_term <- "NO_EXCLUSIONS"
+  }
+  
+  cov_incl <- grep(excl_term, covs, value=T, invert=T)
+  
+  # interactions between date:env
+  if(is.null(flist)) {
+    form <- bf(glue("{resp} ~ 1 + {paste(cov_incl, collapse='+')}", 
+                    "{ifelse(length(cov_incl) > 0, '+', '')}",
+                    "(1 {ifelse(length(cov_incl) > 0, '+', '')}",
+                    "{paste(cov_incl, collapse='+')} | siteid)")) 
+  } else {
+    form <- bf(glue("{resp} ~ 1*bIntercept",
+                    "{ifelse(length(sTerms$yday)>0, '+', '')}",
+                    "{paste(sTerms$yday, covs_date, sep='*', collapse='+')}",
+                    "{ifelse(length(sTerms$b)>0, '+', '')}",
+                    "{ifelse(length(sTerms$p)>0, 
+                             paste(sTerms$p, sTerms$b, covs, sep='*', collapse='+'),
+                             paste(sTerms$b, covs, sep='*', collapse='+'))}"),
+               flist=flist, nl=T)
+  }
+  return(form)
+}
+
+
 calc_ord_mnpr <- function(pred.ord, bloomThresh) {
   tibble(pr0=c(colMeans(pred.ord[,,1,drop=F])),
          pr1=c(colMeans(pred.ord[,,2,drop=F])),
