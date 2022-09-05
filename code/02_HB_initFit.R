@@ -17,10 +17,10 @@ walk(dir("code", "*00_fn", full.names=T), source)
 
 # Model details
 ctrl <- list(adapt_delta=0.95, max_treedepth=20)
-chains <- 1
-iter <- 100
+chains <- 4
+iter <- 2000
 warmup <- iter/2
-refresh <- 10
+refresh <- 500
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
@@ -444,7 +444,7 @@ for(i in 3:length(covariate_sets)) {
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
                         file=glue("out{sep}test_full{sep}bernLP01_{i.name}_{target}"))
-    out.bern11 <- brm(form_bern, data=train.df %>% filter(Nbloom1==1),
+    out.bern11 <- brm(form_11, data=train.df %>% filter(Nbloom1==1),
                       family=bernoulli("probit"), prior=priors, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                       control=ctrl, chains=chains, cores=chains,
