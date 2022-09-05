@@ -305,40 +305,49 @@ for(i in 3:length(covariate_sets)) {
       cv.ord <- brm(form_ord, data=cv_train.df,
                     family=cumulative("probit"), prior=priors, 
                     iter=iter, warmup=warmup, refresh=refresh, init=0,
-                    control=ctrl, chains=chains, cores=chains)
+                    control=ctrl, chains=chains, cores=chains,
+                    file=glue("out{sep}test_full{sep}ord_CV{k}_{i.name}_{target}"))
       cv.ordP <- brm(form_ordP, data=cv_train.df, 
                      family=cumulative("probit"), prior=priors.P, 
                      iter=iter, warmup=warmup, refresh=refresh, init=0,
-                     control=ctrl, chains=chains, cores=chains)
+                     control=ctrl, chains=chains, cores=chains,
+                     file=glue("out{sep}test_full{sep}ordP_CV{k}_{i.name}_{target}"))
       cv.ordLP <- brm(form_ordLP, data=cv_train.df, 
                       family=cumulative("probit"), prior=priors.LP, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
-                      control=ctrl, chains=chains, cores=chains)
+                      control=ctrl, chains=chains, cores=chains,
+                      file=glue("out{sep}test_full{sep}ordLP_CV{k}_{i.name}_{target}"))
       
       cv.bern01 <- brm(form_01, data=cv_train.df %>% filter(Nbloom1==0),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, chains=chains, cores=chains)
+                       control=ctrl, chains=chains, cores=chains,
+                       file=glue("out{sep}test_full{sep}bern01_CV{k}_{i.name}_{target}"))
       cv.bernP01 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==0), 
                         family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, chains=chains, cores=chains)
+                        control=ctrl, chains=chains, cores=chains,
+                        file=glue("out{sep}test_full{sep}bernP01_CV{k}_{i.name}_{target}"))
       cv.bernLP01 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==0), 
                          family=bernoulli("probit"), prior=priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains)
+                         control=ctrl, chains=chains, cores=chains,
+                         file=glue("out{sep}test_full{sep}bernLP01_CV{k}_{i.name}_{target}"))
       cv.bern11 <- brm(form_11, data=cv_train.df %>% filter(Nbloom1==1),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, chains=chains, cores=chains)
+                       control=ctrl, chains=chains, cores=chains,
+                       file=glue("out{sep}test_full{sep}bern11_CV{k}_{i.name}_{target}"))
       cv.bernP11 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==1), 
                         family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, chains=chains, cores=chains)
+                        control=ctrl, chains=chains, cores=chains,
+                        file=glue("out{sep}test_full{sep}bernP11_CV{k}_{i.name}_{target}"))
       cv.bernLP11 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==1), 
                          family=bernoulli("probit"), prior=priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains)
+                         control=ctrl, chains=chains, cores=chains,
+                         file=glue("out{sep}test_full{sep}bernLP11_CV{k}_{i.name}_{target}"))
       
       # RF
       rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s)
