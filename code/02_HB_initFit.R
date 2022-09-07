@@ -144,7 +144,7 @@ covariate_sets <- list(
 #TODO: External, local with WeStCOMS2 = all sites
 
 
-for(i in 3:length(covariate_sets)) {
+for(i in 1:length(covariate_sets)) {
   i.name <- names(covariate_sets)[i]
   i.covs <- covariate_sets[[i]]
   covars <- covars.all[grepl(i.covs, str_remove_all(covars.all, "\\.|_"))]
@@ -170,7 +170,7 @@ for(i in 3:length(covariate_sets)) {
   # Laplace priors only
   flist.LP <- c(
     map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
-    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1+s(ydayCos,ydaySin)|siteid)"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
     map(1, ~"bIntercept~1 + (1|siteid)")
   )
   priors.LP <- c(
@@ -187,8 +187,8 @@ for(i in 3:length(covariate_sets)) {
   # Indicator variable: p * b * X
   flist.P <- c(
     map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
-    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1+s(ydayCos,ydaySin)|siteid)"))),
-    map(s_p, ~as.formula(paste0(.x, "~ 1"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+    map(s_p, ~as.formula(paste0(.x, "~ 1 + (1|siteid)"))),
     map(1, ~"bIntercept~1 + (1|siteid)")
   )
   priors.P <- c(
