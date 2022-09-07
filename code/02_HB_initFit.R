@@ -160,24 +160,24 @@ for(i in 3:length(covariate_sets)) {
   # Interaction priors
   if(i.name=="null") { 
     priors <- c(prior(normal(0, 1), class="Intercept"),
-                prior(normal(0, 0.5), class="sd"))
+                prior(normal(0, 0.1), class="sd"))
   } else {
     priors <- c(prior(horseshoe(3, par_ratio=0.2), class="b"),
                 prior(normal(0, 1), class="Intercept"),
-                prior(normal(0, 0.5), class="sd"))
+                prior(normal(0, 0.1), class="sd"))
   }
   
   # Laplace priors only
   flist.LP <- c(
     map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
-    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1+s(ydayCos,ydaySin)|siteid)"))),
     map(1, ~"bIntercept~1 + (1|siteid)")
   )
   priors.LP <- c(
     prior_string("normal(0,1)", class="b", nlpar="bIntercept"),
     map(covar_s, 
         ~c(prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x)),
-           prior_string("normal(0,.5)", class="sd", nlpar=paste0("b", .x), lb=0),
+           prior_string("normal(0,.1)", class="sd", nlpar=paste0("b", .x), lb=0),
            prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
       do.call('c', .), 
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
@@ -187,7 +187,7 @@ for(i in 3:length(covariate_sets)) {
   # Indicator variable: p * b * X
   flist.P <- c(
     map(s_yday, ~as.formula(paste0(.x, "~1+(1|siteid)"))),
-    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1|siteid)"))),
+    map(s_b, ~as.formula(paste0(.x, "~s(ydayCos,ydaySin) + (1+s(ydayCos,ydaySin)|siteid)"))),
     map(s_p, ~as.formula(paste0(.x, "~ 1"))),
     map(1, ~"bIntercept~1 + (1|siteid)")
   )
@@ -196,7 +196,7 @@ for(i in 3:length(covariate_sets)) {
     map(covar_s, 
         ~c(prior_string("beta(0.1,1)", nlpar=paste0("p", .x), lb=0, ub=1),
            prior_string("normal(0,1)", class="b", nlpar=paste0("b", .x)),
-           prior_string("normal(0,.5)", class="sd", nlpar=paste0("b", .x), lb=0),
+           prior_string("normal(0,.1)", class="sd", nlpar=paste0("b", .x), lb=0),
            prior_string("double_exponential(0,0.1)", class="sds", nlpar=paste0("b", .x), lb=0))) %>%
       do.call('c', .),
     map(covar_date, ~prior_string("double_exponential(0,0.1)", class="b", nlpar=paste0("b", .x))) %>% 
