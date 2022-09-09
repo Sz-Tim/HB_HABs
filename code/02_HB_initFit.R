@@ -387,19 +387,26 @@ for(i in 1:length(covariate_sets)) {
       pred.bern11 <- posterior_epred(cv.bern11, newdata=cv_test.df11, allow_new_levels=T) 
       pred.bernP11 <- posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T) 
       pred.bernLP11 <- posterior_epred(cv.bernLP11, newdata=cv_test.df11, allow_new_levels=T) 
+      pred.rf <- predict(rf, newdata=test.rf, type="prob")[,2]
+      pred.rf_split <- numeric()
+      if(nrow(test.rf01) > 0) {
+        pred.rf_split <- c(pred.rf_split, predict(rf.01, newdata=test.rf01, type="prob")[,2])
+      }
+      if(nrow(test.rf11) > 0) {
+        pred.rf_split <- c(pred.rf_split, predict(rf.11, newdata=test.rf11, type="prob")[,2])
+      }
       
       cv_pred[[k]] <- full_join(
         cv_test.df %>%
           mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
                  ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
                  ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
-                 rf_mnpr=predict(rf, newdata=test.rf, type="prob")[,2]),
+                 rf_mnpr=pred.rf),
         tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
                bern_mnpr=c(colMeans(pred.bern01), colMeans(pred.bern11)),
                bernP_mnpr=c(colMeans(pred.bernP01), colMeans(pred.bernP11)),
                bernLP_mnpr=c(colMeans(pred.bernLP01), colMeans(pred.bernLP11)),
-               rf_split_mnpr=c(predict(rf.01, newdata=test.rf01, type="prob")[,2], 
-                               predict(rf.11, newdata=test.rf11, type="prob")[,2]))
+               rf_split_mnpr=pred.rf_split)
       ) %>%
         mutate(covarSet=i.name)
     }
@@ -536,19 +543,26 @@ for(i in 1:length(covariate_sets)) {
     pred.bern11 <- posterior_epred(out.bern11, newdata=test.df11, allow_new_levels=T) 
     pred.bernP11 <- posterior_epred(out.bernP11, newdata=test.df11, allow_new_levels=T) 
     pred.bernLP11 <- posterior_epred(out.bernLP11, newdata=test.df11, allow_new_levels=T) 
+    pred.rf <- predict(rf, newdata=test.rf, type="prob")[,2]
+    pred.rf_split <- numeric()
+    if(nrow(test.rf01) > 0) {
+      pred.rf_split <- c(pred.rf_split, predict(rf.01, newdata=test.rf01, type="prob")[,2])
+    }
+    if(nrow(test.rf11) > 0) {
+      pred.rf_split <- c(pred.rf_split, predict(rf.11, newdata=test.rf11, type="prob")[,2])
+    }
     
     pred.df <- full_join(
       test.df %>%
         mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
                ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
                ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
-               rf_mnpr=predict(rf, newdata=test.rf, type="prob")[,2]),
+               rf_mnpr=pred.rf),
       tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
              bern_mnpr=c(colMeans(pred.bern01), colMeans(pred.bern11)),
              bernP_mnpr=c(colMeans(pred.bernP01), colMeans(pred.bernP11)),
              bernLP_mnpr=c(colMeans(pred.bernLP01), colMeans(pred.bernLP11)),
-             rf_split_mnpr=c(predict(rf.01, newdata=test.rf01, type="prob")[,2], 
-                             predict(rf.11, newdata=test.rf11, type="prob")[,2]))
+             rf_split_mnpr=pred.rf_split)
     ) %>%
       mutate(covarSet=i.name)
     
