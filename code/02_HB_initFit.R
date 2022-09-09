@@ -258,7 +258,9 @@ for(i in 1:length(covariate_sets)) {
       filter(complete.cases(.)) %>%
       mutate(covarSet=i.name,
              NlnRAvg1=NA,
-             NlnRAvg2=NA) %>%
+             NlnRAvg2=NA,
+             lon_sc=LaplacesDemon::CenterScale(lon),
+             lat_sc=LaplacesDemon::CenterScale(lat)) %>%
       filter(!siteid %in% c(70, 74, 75, 80, 88))
     # TODO: I don't remember why these sites are excluded
     
@@ -351,25 +353,19 @@ for(i in 1:length(covariate_sets)) {
                          file=glue("out{sep}test_full{sep}bernLP11_CV{k}_{i.name}_{target}"))
       
       # RF
-      rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s)
+      rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
       train.rf <- cv_train.df %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-        as.data.frame()
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
       train.rf01 <- cv_train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-        as.data.frame()
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
       train.rf11 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-        as.data.frame()
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
       test.rf <- cv_test.df %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-        as.data.frame()
+        mutate(Nbloom=factor(Nbloom)) %>%  as.data.frame()
       test.rf01 <- cv_test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-        as.data.frame()
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
       test.rf11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-        as.data.frame()
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
       
       rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F, ntree=1000)
       rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F, ntree=1000)
@@ -480,25 +476,19 @@ for(i in 1:length(covariate_sets)) {
                         file=glue("out{sep}test_full{sep}bernLP11_{i.name}_{target}"))
     
     # RF
-    rf_vars <- c("Nbloom", "Nbloom1", "lon", "lat", covar_date, covar_s)
+    rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
     train.rf <- train.df %>% select(one_of(rf_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-      as.data.frame()
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     train.rf01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-      as.data.frame()
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     train.rf11 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-      as.data.frame()
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     test.rf <- test.df %>% select(one_of(rf_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-      as.data.frame()
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     test.rf01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-      as.data.frame()
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     test.rf11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom), lon=c(scale(lon)), lat=c(scale(lat))) %>%
-      as.data.frame()
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     
     rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F)
     rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F)
