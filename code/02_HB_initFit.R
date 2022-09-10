@@ -534,7 +534,7 @@ for(i in 1:length(covariate_sets)) {
     pred.bernLP01 <- colMeans(posterior_epred(out.bernLP01, newdata=test.df01, allow_new_levels=T)) 
     pred.rf <- predict(rf, newdata=test.rf, type="prob")[,2]
     pred.rf_01 <- predict(rf.01, newdata=test.rf01, type="prob")[,2]
-    if(nrow(cv_test.df11) > 0) {
+    if(nrow(test.df11) > 0) {
       pred.bern11 <- colMeans(posterior_epred(out.bern11, newdata=test.df11, allow_new_levels=T))
       pred.bernP11 <- colMeans(posterior_epred(out.bernP11, newdata=test.df11, allow_new_levels=T))
       pred.bernLP11 <- colMeans(posterior_epred(out.bernLP11, newdata=test.df11, allow_new_levels=T)) 
