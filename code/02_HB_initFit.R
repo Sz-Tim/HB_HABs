@@ -108,7 +108,7 @@ covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
 covar_int.all <- c(
   "ydayCos", "ydaySin",
   paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
-           "windVel", "waterVelL", "waterVelR",
+           "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
            "influxwk", "fetch",
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
            # "mo(NcatF1)", "mo(NcatF2)",
@@ -122,7 +122,7 @@ covar_int.all <- c(
 )
 covar_s.all <- c(
   "tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
-  "windVel", "waterVelL", "waterVelR",
+  "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
   "influxwk", "fetch",
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
   "Nbloom1", "Nbloom2",
