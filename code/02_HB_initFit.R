@@ -103,13 +103,13 @@ covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
             "wind_L_wk", "windDir_L_wk",
             "water_L_wk", "waterDir_L_wk", 
             "water_R_wk", "waterDir_R_wk",
-            "influx_wk", 
+            "fetch", #"influxwk",  
             "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk")
 covar_int.all <- c(
   "ydayCos", "ydaySin",
   paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
            "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
-           "influxwk", "fetch",
+           "fetch", #"influxwk", ",
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
            # "mo(NcatF1)", "mo(NcatF2)",
            "Nbloom1", "Nbloom2",
@@ -123,7 +123,7 @@ covar_int.all <- c(
 covar_s.all <- c(
   "tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
   "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
-  "influxwk", "fetch",
+  "fetch", #"influxwk", 
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
   "Nbloom1", "Nbloom2",
   "NlnWt1", "NlnWt2",
@@ -277,7 +277,7 @@ for(i in length(covariate_sets)) {
       } 
     }
     
-    write_csv(target.df, glue("out{sep}test_full{sep}dataset_{i.name}_{target}.csv"))
+    write_csv(target.df, glue("out{sep}test_allOnly{sep}dataset_{i.name}_{target}.csv"))
     
     train.df <- target.df %>% filter(year <= 2017)
     test.df <- target.df %>% filter(year > 2017)
@@ -304,47 +304,47 @@ for(i in length(covariate_sets)) {
                    family=cumulative("probit"), prior=priors, 
                    iter=iter, warmup=warmup, refresh=refresh, init=0,
                    control=ctrl, chains=chains, cores=chains,
-                   file=glue("out{sep}test_full{sep}ord_{i.name}_{target}"))
+                   file=glue("out{sep}test_allOnly{sep}ord_{i.name}_{target}"))
     out.ordP <- brm(form_ordP, data=train.df, 
                     family=cumulative("probit"), prior=priors.P, 
                     iter=iter, warmup=warmup, refresh=refresh, init=0,
                     control=ctrl, chains=chains, cores=chains,
-                    file=glue("out{sep}test_full{sep}ordP_{i.name}_{target}"))
+                    file=glue("out{sep}test_allOnly{sep}ordP_{i.name}_{target}"))
     out.ordLP <- brm(form_ordLP, data=train.df, 
                      family=cumulative("probit"), prior=priors.LP, 
                      iter=iter, warmup=warmup, refresh=refresh, init=0,
                      control=ctrl, chains=chains, cores=chains,
-                     file=glue("out{sep}test_full{sep}ordLP_{i.name}_{target}"))
+                     file=glue("out{sep}test_allOnly{sep}ordLP_{i.name}_{target}"))
     out.bern01 <- brm(form_01, data=train.df %>% filter(Nbloom1==0),
                       family=bernoulli("probit"), prior=priors, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                       control=ctrl, chains=chains, cores=chains,
-                      file=glue("out{sep}test_full{sep}bern01_{i.name}_{target}"))
+                      file=glue("out{sep}test_allOnly{sep}bern01_{i.name}_{target}"))
     out.bernP01 <- brm(form_bernP, data=train.df %>% filter(Nbloom1==0), 
                        family=bernoulli("probit"), prior=priors.P, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bernP01_{i.name}_{target}"))
+                       file=glue("out{sep}test_allOnly{sep}bernP01_{i.name}_{target}"))
     out.bernLP01 <- brm(form_bernLP, data=train.df %>% filter(Nbloom1==0), 
                         family=bernoulli("probit"), prior=priors.LP, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernLP01_{i.name}_{target}"))
+                        file=glue("out{sep}test_allOnly{sep}bernLP01_{i.name}_{target}"))
     out.bern11 <- brm(form_11, data=train.df %>% filter(Nbloom1==1),
                       family=bernoulli("probit"), prior=priors, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                       control=ctrl, chains=chains, cores=chains,
-                      file=glue("out{sep}test_full{sep}bern11_{i.name}_{target}"))
+                      file=glue("out{sep}test_allOnly{sep}bern11_{i.name}_{target}"))
     out.bernP11 <- brm(form_bernP, data=train.df %>% filter(Nbloom1==1), 
                        family=bernoulli("probit"), prior=priors.P, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bernP11_{i.name}_{target}"))
+                       file=glue("out{sep}test_allOnly{sep}bernP11_{i.name}_{target}"))
     out.bernLP11 <- brm(form_bernLP, data=train.df %>% filter(Nbloom1==1), 
                         family=bernoulli("probit"), prior=priors.LP, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernLP11_{i.name}_{target}"))
+                        file=glue("out{sep}test_allOnly{sep}bernLP11_{i.name}_{target}"))
     
     # RF
     rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
@@ -364,9 +364,9 @@ for(i in length(covariate_sets)) {
     rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F)
     rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F)
     rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F)
-    saveRDS(rf, glue("out{sep}test_full{sep}rf_{i.name}_{target}.rds"))
-    saveRDS(rf.01, glue("out{sep}test_full{sep}rf01_{i.name}_{target}.rds"))
-    saveRDS(rf.11, glue("out{sep}test_full{sep}rf11_{i.name}_{target}.rds"))
+    saveRDS(rf, glue("out{sep}test_allOnly{sep}rf_{i.name}_{target}.rds"))
+    saveRDS(rf.01, glue("out{sep}test_allOnly{sep}rf01_{i.name}_{target}.rds"))
+    saveRDS(rf.11, glue("out{sep}test_allOnly{sep}rf11_{i.name}_{target}.rds"))
     
     # Fitted
     fit.ord <- posterior_epred(out.ord)
@@ -392,7 +392,7 @@ for(i in length(covariate_sets)) {
              rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]))
     ) %>%
       mutate(covarSet=i.name)
-    write_csv(fit.df, glue("out{sep}test_full{sep}fit_{i.name}_{target}.csv"))
+    write_csv(fit.df, glue("out{sep}test_allOnly{sep}fit_{i.name}_{target}.csv"))
     
     # OOS predictions
     test.df01 <- test.df %>% filter(Nbloom1==0) %>% droplevels
@@ -431,7 +431,7 @@ for(i in length(covariate_sets)) {
     ) %>%
       mutate(covarSet=i.name)
     
-    write_csv(pred.df, glue("out{sep}test_full{sep}pred_{i.name}_{target}.csv"))
+    write_csv(pred.df, glue("out{sep}test_allOnly{sep}pred_{i.name}_{target}.csv"))
     
     # Cross-validation by year
     yrCV <- unique(train.df$year)
@@ -460,48 +460,48 @@ for(i in length(covariate_sets)) {
                     family=cumulative("probit"), prior=priors, 
                     iter=iter, warmup=warmup, refresh=refresh, init=0,
                     control=ctrl, chains=chains, cores=chains,
-                    file=glue("out{sep}test_full{sep}ord_CV{k}_{i.name}_{target}"))
+                    file=glue("out{sep}test_allOnly{sep}ord_CV{k}_{i.name}_{target}"))
       cv.ordP <- brm(form_ordP, data=cv_train.df, 
                      family=cumulative("probit"), prior=priors.P, 
                      iter=iter, warmup=warmup, refresh=refresh, init=0,
                      control=ctrl, chains=chains, cores=chains,
-                     file=glue("out{sep}test_full{sep}ordP_CV{k}_{i.name}_{target}"))
+                     file=glue("out{sep}test_allOnly{sep}ordP_CV{k}_{i.name}_{target}"))
       cv.ordLP <- brm(form_ordLP, data=cv_train.df, 
                       family=cumulative("probit"), prior=priors.LP, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                       control=ctrl, chains=chains, cores=chains,
-                      file=glue("out{sep}test_full{sep}ordLP_CV{k}_{i.name}_{target}"))
+                      file=glue("out{sep}test_allOnly{sep}ordLP_CV{k}_{i.name}_{target}"))
       
       cv.bern01 <- brm(form_01, data=cv_train.df %>% filter(Nbloom1==0),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bern01_CV{k}_{i.name}_{target}"))
+                       file=glue("out{sep}test_allOnly{sep}bern01_CV{k}_{i.name}_{target}"))
       cv.bernP01 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==0), 
                         family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernP01_CV{k}_{i.name}_{target}"))
+                        file=glue("out{sep}test_allOnly{sep}bernP01_CV{k}_{i.name}_{target}"))
       cv.bernLP01 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==0), 
                          family=bernoulli("probit"), prior=priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
                          control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}bernLP01_CV{k}_{i.name}_{target}"))
+                         file=glue("out{sep}test_allOnly{sep}bernLP01_CV{k}_{i.name}_{target}"))
       cv.bern11 <- brm(form_11, data=cv_train.df %>% filter(Nbloom1==1),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bern11_CV{k}_{i.name}_{target}"))
+                       file=glue("out{sep}test_allOnly{sep}bern11_CV{k}_{i.name}_{target}"))
       cv.bernP11 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==1), 
                         family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernP11_CV{k}_{i.name}_{target}"))
+                        file=glue("out{sep}test_allOnly{sep}bernP11_CV{k}_{i.name}_{target}"))
       cv.bernLP11 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==1), 
                          family=bernoulli("probit"), prior=priors.LP, 
                          iter=iter, warmup=warmup, refresh=refresh, init=0,
                          control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}bernLP11_CV{k}_{i.name}_{target}"))
+                         file=glue("out{sep}test_allOnly{sep}bernLP11_CV{k}_{i.name}_{target}"))
       
       # RF
       rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
@@ -560,7 +560,7 @@ for(i in length(covariate_sets)) {
         mutate(covarSet=i.name)
     }
     cv_pred %>% do.call('rbind', .) %>%
-      write_csv(glue("out{sep}test_full{sep}CV_{i.name}_{target}.csv"))
+      write_csv(glue("out{sep}test_allOnly{sep}CV_{i.name}_{target}.csv"))
     
     cat("Finished", target, "\n")
   }
