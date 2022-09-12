@@ -117,7 +117,7 @@ covar_int.all <- c(
            "NlnRAvg1", "NlnRAvg2"), 
          ":ydayCos:ydaySin"),
   # "mo(NcatF1):mo(NcatF2)",
-  paste0(c("windVel", "waterVelL", "waterVelR"), 
+  paste0(c("windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk"), 
          ":fetch")
 )
 covar_s.all <- c(
