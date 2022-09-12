@@ -13,7 +13,7 @@ theme_set(theme_bw())
 species <- str_sub(dir("out/test_full", "dataset_all"), 9, -5)
 
 data.df <- dir("out/test_full", "dataset.*csv", full.names=T) %>% 
-  map_dfr(~read_csv(.x) %>%
+  map_dfr(~read_csv(.x, show_col_type=F) %>%
             mutate(month=lubridate::month(date),
                    week=lubridate::week(date)) %>%
             select(siteid, date, obsid, month, week, date, Nbloom1) %>%
@@ -30,7 +30,6 @@ data.df <- dir("out/test_full", "dataset.*csv", full.names=T) %>%
   mutate(xy_mnpr=cummean(Nbloom1)) %>%
   ungroup
 
-# TODO: Calculate LL using cross-validated runs, k=nYears[fit
 
 cv.df <- map_dfr(dir("out/test_full/", "^CV.*csv"), 
                  ~read_csv(glue("out/test_full/{.x}"), show_col_types=F) %>%
@@ -46,7 +45,7 @@ fit.df <- map_dfr(dir("out/test_full/", "^fit.*csv"),
                        species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5),
                        across(ends_with("mnpr"), ~pmin(pmax(.x, 1e-6), 1-1e-6))))
 pred.df <- map_dfr(dir("out/test_full/", "^pred.*csv"), 
-                   ~read_csv(glue("out/test_full/{.x}")) %>%
+                   ~read_csv(glue("out/test_full/{.x}"), show_col_types=F) %>%
                      select(covarSet, siteid, date, obsid, Nbloom, Nbloom1, contains("_mnpr")) %>%
                      mutate(month=lubridate::month(date), 
                             species=str_sub(str_split_fixed(.x, "_", 3)[,3], 1, -5),
@@ -491,12 +490,12 @@ pred.df %>% ungroup %>%
 # By site
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  group_by(species, model, siteNum) %>%
+  group_by(species, model, siteNum, covarSet) %>%
   summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   ggplot(aes(siteNum, Brier, colour=model)) + 
   geom_point(position=position_jitter(width=0.01)) + 
   scale_colour_manual(values=mod_cols) +
-  facet_wrap(~species, scales="free") 
+  facet_grid(species~covarSet, scales="free") 
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
   group_by(species, model, siteNum) %>%
@@ -580,18 +579,18 @@ pred.df %>% ungroup %>%
 # By month
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  group_by(species, model, month) %>%
+  group_by(species, model, month, covarSet) %>%
   summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
   ggplot(aes(month, Brier, colour=model)) + 
   geom_line() + 
   scale_colour_manual(values=mod_cols) +
   scale_x_continuous(breaks=seq(1,12,by=2), labels=month.abb[seq(1,12,by=2)]) +
-  facet_wrap(~species, scales="free") 
+  facet_grid(species~covarSet, scales="free") 
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  group_by(species, model, month) %>%
+  group_by(species, model, month, covarSet) %>%
   summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
-  group_by(species, month) %>%
+  group_by(species, month, covarSet) %>%
   arrange(species, model) %>%
   mutate(Improve=first(Brier)-Brier) %>%
   ggplot(aes(month, Improve, colour=model)) + 
@@ -599,13 +598,13 @@ pred.df %>% ungroup %>%
   geom_line(position=position_jitter(width=0.05)) + 
   scale_colour_manual(values=mod_cols) +
   scale_x_continuous(breaks=seq(1,12,by=2), labels=month.abb[seq(1,12,by=2)]) +
-  facet_wrap(~species, scales="free") +
+  facet_grid(species~covarSet, scales="free")  +
   labs(x="", y="Improvement in Brier score\nrelative to site-monthly avg")
 pred.df %>% ungroup %>%
   mutate(model=factor(model, levels=names(mod_cols))) %>%
-  group_by(species, model, month) %>%
+  group_by(species, model, month, covarSet) %>%
   summarise(Brier=mean((pred-Nbloom)^2, na.rm=T)) %>%
-  group_by(species, month) %>%
+  group_by(species, month, covarSet) %>%
   arrange(species, model) %>%
   mutate(Brier=Brier+0.01) %>%
   mutate(pctImprove=(first(Brier)-Brier)/first(Brier)*100) %>%
@@ -615,7 +614,7 @@ pred.df %>% ungroup %>%
   scale_colour_manual(values=mod_cols) +
   scale_x_continuous(breaks=seq(1,12,by=2), labels=month.abb[seq(1,12,by=2)]) +
   ylim(-50,NA) +
-  facet_wrap(~species, scales="free") +
+  facet_grid(species~covarSet, scales="free")  +
   labs(x="", y="Improvement in Brier score\nrelative to site-monthly avg (%)")
 
 
@@ -835,33 +834,6 @@ auc.df %>% select(-type) %>%
 
 
 
-
-dateConditions <- tibble(yday=seq(1, 365, length.out=12)) %>%
-  mutate(ydayCos=cos(yday*2*pi/365),
-         ydaySin=sin(yday*2*pi/365))
-
-ord.f <- dir("out/test_full", "ord_", full.names=T)
-bern01.f <- dir("out/test_full", "bern01_", full.names=T)
-ord.eff <- map(ord.f, 
-               ~fixef(readRDS(.x), probs=c(0.1, 0.9)) %>% 
-                 as_tibble(rownames="var") %>% 
-                 filter(sign(Q10)==sign(Q90)))
-ce.f <- map2(ord.f, ord.eff, 
-             ~readRDS(.x) %>%
-               conditional_effects(.,
-                                   effects=grep("Intercept", .y$var, invert=T, value=T),
-                                   conditions=dateConditions))
-
-
-
-
-
-dateConditions <- tibble(yday=seq(1, 365, length.out=365)) %>%
-  mutate(ydayCos=cos(yday*2*pi/365),
-         ydaySin=sin(yday*2*pi/365))
-
-
-
 sams.cols <- c("alexandrium_sp"="#2A5883",
                "dinophysis_sp"="#46BFDE",
                "karenia_mikimotoi"="#A9DAE0",
@@ -872,43 +844,19 @@ nlpars <- c('bydayCos', 'bydaySin',
             'bwindVel', 'bwaterVelL', 'bwaterVelR', 'binfluxwk', 'bfetch', 
             'battnwk', 'bchlwk', 'bdinowk', 'bo2wk', 'bphwk', 'bpo4wk', 
             'bNbloom1', 'bNbloom2', 'bNlnWt1', 'bNlnWt2')
-out.alex <- readRDS("out/test_full/ordP_all_alexandrium_sp.rds")
+
+
+#####
+# Compare ordP across all species
 data.alex <- read_csv("out/test_full/dataset_all_alexandrium_sp.csv")
-pred.alex <- map_dfr(nlpars, ~data.alex %>%
-                       mutate(slope=colMeans(posterior_epred(out.alex, newdata=., allow_new_levels=T, nlpar=.x)),
-                              var=.x))
-
-ggplot(pred.alex, aes(yday, slope)) + 
-  geom_hline(yintercept=0, colour="grey30") +
-  geom_point(alpha=0.5) + facet_wrap(~var)
-
-
-out.dino <- readRDS("out/test_full/ordP_all_dinophysis_sp.rds")
-data.dino <- read_csv("out/test_full/dataset_all_dinophysis_sp.csv")
-pred.dino <- map_dfr(nlpars, ~data.dino %>%
-                       mutate(slope=colMeans(posterior_epred(out.dino, newdata=., allow_new_levels=T, nlpar=.x)),
-                              var=.x))
-
-ggplot(pred.dino, aes(yday, slope)) + 
-  geom_hline(yintercept=0, colour="grey30") +
-  geom_point(alpha=0.5) + facet_wrap(~var)
-
-pred.da <- bind_rows(pred.alex %>% mutate(species="alexandrium_sp"),
-                     pred.dino %>% mutate(species="dinophysis_sp"))
-ggplot(pred.da, aes(yday, slope, colour=species, group=paste(species, siteid))) + 
-  geom_hline(yintercept=0, colour="grey30") +
-  geom_line(alpha=0.5) + facet_wrap(~var) +
-  scale_colour_manual(values=sams.cols) +
-  guides(colour=guide_legend(override.aes=list(alpha=1, size=1)))
-
-
 species <- names(sams.cols)
-out.p <- dir("out/test_full", "ordP_all_", full.names=T) %>%
+out.p <- dir("out/test_full", "ordP_CV1_all_", full.names=T) %>%
   map(readRDS) %>% setNames(species)
-p.effects <- c('tempLwk', 'salinityLwk', 
-               'shortwaveLwk', 'windVel', 'waterVelL', 'waterVelR', 'influxwk', 
-               'fetch', 'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2')
+p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk',
+               'windVel', 'waterVelL', 'waterVelR', 'windLwk', 'waterLwk', 'waterRwk', 
+               'influxwk', 'fetch',
+               'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk',
+               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 p.nonZero <- map(out.p, ~fixef(.x) %>% 
                    as_tibble(rownames="var") %>%
                    filter(grepl("^p", var)) %>%
@@ -916,13 +864,12 @@ p.nonZero <- map(out.p, ~fixef(.x) %>%
 library(bayesplot)
 imap(out.p, ~mcmc_intervals(.x, regex_pars="^b_p.*Intercept") + ggtitle(.y))
 
-data.alex <- read_csv("out/test_full/dataset_all_alexandrium_sp.csv")
-
-smooths.df <- bind_cols(expand_grid(yday=seq(1, 365, length.out=52),
+smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                     siteid=unique(data.alex$siteid)) %>%
                           mutate(ydayCos=cos(yday*2*pi/365),
                                  ydaySin=sin(yday*2*pi/365),
-                                 ydaySC=ydayCos*ydaySin),
+                                 ydaySC=ydayCos*ydaySin,
+                                 date=as_date(yday, origin="2019-01-01")),
                         map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
                           pivot_wider(names_from="var", values_from="val"))
 pred.ls <- vector("list", length(species)) %>% setNames(species)
@@ -939,69 +886,25 @@ for(i in seq_along(pred.ls)) {
                                    species=species[i]))
 }
 pred.smooths <- do.call(rbind, pred.ls)
-ggplot(pred.smooths, aes(yday, slope*p, colour=species, group=paste(species, siteid))) + 
+ggplot(pred.smooths, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var, ncol=6) +
-  # scale_colour_manual(values=sams.cols) +
-  scale_colour_brewer("", type="qual", palette=2) +
+  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
+  scale_colour_manual(values=sams.cols) +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
-  theme(panel.grid=element_blank(), legend.position="bottom")
+  theme(panel.grid.minor=element_blank(), legend.position="bottom")
 ggsave("figs/smooths_all.jpg", width=9, height=5)
 
 
 
 
 
-out.p <- dir("out/test_full", "ordP_", full.names=T) %>%
-  map(readRDS) %>% setNames(c("autoreg", "cprn", "external", "local", "all"))
-p.effects <- c('tempLwk', 'salinityLwk', 
-               'shortwaveLwk', 'windVel', 'waterVelL', 'waterVelR', 'influxwk', 
-               'fetch', 'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2')
-p.all <- map_dfr(out.p, ~fixef(.x) %>% 
-                       as_tibble(rownames="var") %>%
-                       filter(grepl("^p", var)))
-library(bayesplot)
-imap(out.p, ~mcmc_intervals(.x, regex_pars="^b_p.*Intercept") + ggtitle(.y))
 
-smooths.df <- bind_cols(expand_grid(yday=seq(1, 365, length.out=52),
-                                    siteid=unique(data.alex$siteid)) %>%
-                          mutate(ydayCos=cos(yday*2*pi/365),
-                                 ydaySin=sin(yday*2*pi/365),
-                                 ydaySC=ydayCos*ydaySin),
-                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
-                          pivot_wider(names_from="var", values_from="val"))
-pred.ls <- vector("list", length(out.p)) %>% setNames(names(out.p))
-p.effects <- list(autoreg=c("Nbloom1", "Nbloom2", "NlnWt1", "NlnWt2"),
-                  cprn=c("attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk"),
-                  external=c("windVel", "waterVelL", "waterVelR", "influxwk", "fetch"),
-                  local=c("tempLwk", "salinityLwk", "shortwaveLwk"))
-for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects[[i]], 
-                          ~smooths.df %>%
-                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                                  allow_new_levels=T,
-                                                                  nlpar=paste0("b", .x))),
-                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                              allow_new_levels=T,
-                                                              nlpar=paste0("p", .x))),
-                                   var=.x,
-                                   covarSet=names(out.p)[i]))
-}
-pred.smooths <- do.call(rbind, pred.ls)
-ggplot(pred.smooths, aes(yday, slope*p, colour=covarSet, group=paste(covarSet, siteid))) + 
-  geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var) +
-  # scale_colour_manual(values=sams.cols) +
-  scale_colour_brewer(type="qual", palette=2) +
-  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
-  theme(panel.grid=element_blank())
-
-
-
-data.alex <- read_csv("out/test_full/dataset_autoreg_alexandrium_sp.csv")
-out.p <- dir("out/test_full", "P.*autoreg_alexandrium_sp.rds", full.names=T) %>%
-  map(readRDS) %>% setNames(c("bern01", "bern11", "ord"))
+#####
+# Compare ordLP vs ordP for one species
+data.dino <- read_csv("out/test_full/dataset_autoreg_dinophysis_sp.csv")
+out.p <- dir("out/test_full", "P.*autoreg_dinophysis_sp.rds", full.names=T) %>%
+  map(readRDS) %>% setNames(c("ordLP", "ordP"))
 p.effects <- c('Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 p.all <- map_dfr(out.p, ~fixef(.x) %>% 
                    as_tibble(rownames="var") %>%
@@ -1009,30 +912,44 @@ p.all <- map_dfr(out.p, ~fixef(.x) %>%
 library(bayesplot)
 imap(out.p, ~mcmc_intervals(.x, regex_pars="^b_p.*Intercept") + ggtitle(.y))
 
-smooths.df <- bind_cols(expand_grid(yday=seq(1, 365, length.out=52),
+smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                     siteid=unique(data.alex$siteid)) %>%
                           mutate(ydayCos=cos(yday*2*pi/365),
                                  ydaySin=sin(yday*2*pi/365),
-                                 ydaySC=ydayCos*ydaySin),
+                                 ydaySC=ydayCos*ydaySin,
+                                 date=as_date(yday, origin="2019-01-01")),
                         map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
                           pivot_wider(names_from="var", values_from="val"))
 pred.ls <- vector("list", length(out.p)) %>% setNames(names(out.p))
 for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects, 
-                          ~smooths.df %>%
-                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                                  allow_new_levels=T,
-                                                                  nlpar=paste0("b", .x))),
-                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                              allow_new_levels=T,
-                                                              nlpar=paste0("p", .x))),
-                                   var=.x,
-                                   model=names(out.p)[i]))
+  if(grepl("LP", names(pred.ls)[i])) {
+    pred.ls[[i]] <- map_dfr(p.effects, 
+                            ~smooths.df %>%
+                              mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                    allow_new_levels=T,
+                                                                    nlpar=paste0("b", .x))),
+                                     var=.x,
+                                     model=names(out.p)[i]))
+  } else {
+    pred.ls[[i]] <- map_dfr(p.effects, 
+                            ~smooths.df %>%
+                              mutate(b=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                    allow_new_levels=T,
+                                                                    nlpar=paste0("b", .x))),
+                                     p=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                allow_new_levels=T,
+                                                                nlpar=paste0("p", .x))),
+                                     var=.x,
+                                     model=names(out.p)[i])  %>%
+                              mutate(slope=b*p) %>%
+                              select(-b, -p)) 
+  }
 }
 pred.smooths <- do.call(rbind, pred.ls)
-ggplot(pred.smooths, aes(yday, slope*p, colour=model, group=paste(model, siteid))) + 
+ggplot(pred.smooths, aes(date, slope, colour=model, group=paste(model, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var) +
-  scale_colour_manual(values=c("steelblue3", "skyblue", "olivedrab")) +
+  geom_line(alpha=0.25) + facet_wrap(~var, ncol=2) +
+  scale_colour_brewer(type="qual", palette=2) +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
-  theme(panel.grid=element_blank())
+  theme(panel.grid.minor=element_blank())
