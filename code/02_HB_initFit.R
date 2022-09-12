@@ -144,7 +144,7 @@ covariate_sets <- list(
 #TODO: External, local with WeStCOMS2 = all sites
 
 
-for(i in 1:length(covariate_sets)) {
+for(i in length(covariate_sets)) {
   i.name <- names(covariate_sets)[i]
   i.covs <- covariate_sets[[i]]
   covars <- covars.all[grepl(i.covs, str_remove_all(covars.all, "\\.|_"))]
@@ -211,7 +211,7 @@ for(i in 1:length(covariate_sets)) {
   
   # initial fit -------------------------------------------------------------
   
-  for(sp in 1:length(species)) {
+  for(sp in 1) {
     target <- species[sp]
     target.tf <- thresh.df %>% filter(hab_parameter==target)
     
