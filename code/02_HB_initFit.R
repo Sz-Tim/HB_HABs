@@ -283,135 +283,6 @@ for(i in 1:length(covariate_sets)) {
     test.df <- target.df %>% filter(year > 2017)
     bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
     
-    yrCV <- unique(train.df$year)
-    cv_pred <- map(yrCV, ~NULL)
-    for(k in 1:length(yrCV)) {
-      yr <- yrCV[k]
-      cv_train.df <- train.df %>% filter(year != yr)
-      cv_test.df <- train.df %>% filter(year == yr)
-      
-      # Formulas with interactions: errors if missing NcatF levels
-      form_ord <- makeFormula(cv_train.df, covar_int, "NcatNum | thres(3)")
-      form_01 <- makeFormula(filter(cv_train.df, Nbloom1==0), covar_int, "Nbloom")
-      form_11 <- makeFormula(filter(cv_train.df, Nbloom1==1), covar_int, "Nbloom")
-      
-      # Smoother formulas
-      form_ordLP <- makeFormula(cv_train.df, covar_s, "NcatNum | thres(3)", covar_date,
-                                flist.LP, list(b=s_b, yday=s_yday, p=NULL))
-      form_bernLP <- makeFormula(cv_train.df, covar_s, "Nbloom", covar_date,
-                                 flist.LP, list(b=s_b, yday=s_yday, p=NULL))
-      form_ordP <- makeFormula(cv_train.df, covar_s, "NcatNum | thres(3)", covar_date,
-                               flist.P, list(b=s_b, yday=s_yday, p=s_p))
-      form_bernP <- makeFormula(cv_train.df, covar_s, "Nbloom", covar_date,
-                                flist.P, list(b=s_b, yday=s_yday, p=s_p))
-      
-      cv.ord <- brm(form_ord, data=cv_train.df,
-                    family=cumulative("probit"), prior=priors, 
-                    iter=iter, warmup=warmup, refresh=refresh, init=0,
-                    control=ctrl, chains=chains, cores=chains,
-                    file=glue("out{sep}test_full{sep}ord_CV{k}_{i.name}_{target}"))
-      cv.ordP <- brm(form_ordP, data=cv_train.df, 
-                     family=cumulative("probit"), prior=priors.P, 
-                     iter=iter, warmup=warmup, refresh=refresh, init=0,
-                     control=ctrl, chains=chains, cores=chains,
-                     file=glue("out{sep}test_full{sep}ordP_CV{k}_{i.name}_{target}"))
-      cv.ordLP <- brm(form_ordLP, data=cv_train.df, 
-                      family=cumulative("probit"), prior=priors.LP, 
-                      iter=iter, warmup=warmup, refresh=refresh, init=0,
-                      control=ctrl, chains=chains, cores=chains,
-                      file=glue("out{sep}test_full{sep}ordLP_CV{k}_{i.name}_{target}"))
-      
-      cv.bern01 <- brm(form_01, data=cv_train.df %>% filter(Nbloom1==0),
-                       family=bernoulli("probit"), prior=priors, 
-                       iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bern01_CV{k}_{i.name}_{target}"))
-      cv.bernP01 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==0), 
-                        family=bernoulli("probit"), prior=priors.P, 
-                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernP01_CV{k}_{i.name}_{target}"))
-      cv.bernLP01 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==0), 
-                         family=bernoulli("probit"), prior=priors.LP, 
-                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}bernLP01_CV{k}_{i.name}_{target}"))
-      cv.bern11 <- brm(form_11, data=cv_train.df %>% filter(Nbloom1==1),
-                       family=bernoulli("probit"), prior=priors, 
-                       iter=iter, warmup=warmup, refresh=refresh, init=0,
-                       control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}test_full{sep}bern11_CV{k}_{i.name}_{target}"))
-      cv.bernP11 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==1), 
-                        family=bernoulli("probit"), prior=priors.P, 
-                        iter=iter, warmup=warmup, refresh=refresh, init=0,
-                        control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}test_full{sep}bernP11_CV{k}_{i.name}_{target}"))
-      cv.bernLP11 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==1), 
-                         family=bernoulli("probit"), prior=priors.LP, 
-                         iter=iter, warmup=warmup, refresh=refresh, init=0,
-                         control=ctrl, chains=chains, cores=chains,
-                         file=glue("out{sep}test_full{sep}bernLP11_CV{k}_{i.name}_{target}"))
-      
-      # RF
-      rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
-      train.rf <- cv_train.df %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      train.rf01 <- cv_train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      train.rf11 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      test.rf <- cv_test.df %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom)) %>%  as.data.frame()
-      test.rf01 <- cv_test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      test.rf11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
-        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      
-      rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F, ntree=1000)
-      rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F, ntree=1000)
-      rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F, ntree=1000)
-      
-      # Cross-validation predictions
-      cv_test.df01 <- cv_test.df %>% filter(Nbloom1==0) %>% droplevels
-      cv_test.df11 <- cv_test.df %>% filter(Nbloom1==1) %>% droplevels
-      pred.ord <- posterior_epred(cv.ord, newdata=cv_test.df, allow_new_levels=T)
-      pred.ordP <- posterior_epred(cv.ordP, newdata=cv_test.df, allow_new_levels=T)
-      pred.ordLP <- posterior_epred(cv.ordLP, newdata=cv_test.df, allow_new_levels=T)
-      pred.bern01 <- colMeans(posterior_epred(cv.bern01, newdata=cv_test.df01, allow_new_levels=T))
-      pred.bernP01 <- colMeans(posterior_epred(cv.bernP01, newdata=cv_test.df01, allow_new_levels=T))
-      pred.bernLP01 <- colMeans(posterior_epred(cv.bernLP01, newdata=cv_test.df01, allow_new_levels=T)) 
-      pred.rf <- predict(rf, newdata=test.rf, type="prob")[,2]
-      pred.rf_01 <- predict(rf.01, newdata=test.rf01, type="prob")[,2]
-      if(nrow(cv_test.df11) > 0) {
-        pred.bern11 <- colMeans(posterior_epred(cv.bern11, newdata=cv_test.df11, allow_new_levels=T))
-        pred.bernP11 <- colMeans(posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T))
-        pred.bernLP11 <- colMeans(posterior_epred(cv.bernLP11, newdata=cv_test.df11, allow_new_levels=T)) 
-        pred.rf_11 <- predict(rf.11, newdata=test.rf11, type="prob")[,2]
-      } else {
-        pred.bern11 <- numeric(0)
-        pred.bernP11 <- numeric(0)
-        pred.bernLP11 <- numeric(0)
-        pred.rf_11 <- numeric(0)
-      }
-      
-      cv_pred[[k]] <- full_join(
-        cv_test.df %>%
-          mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
-                 ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
-                 ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
-                 rf_mnpr=pred.rf),
-        tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
-               bern_mnpr=c(pred.bern01, pred.bern11),
-               bernP_mnpr=c(pred.bernP01, pred.bernP11),
-               bernLP_mnpr=c(pred.bernLP01, pred.bernLP11),
-               rf_split_mnpr=c(pred.rf_01, pred.rf_11))
-      ) %>%
-        mutate(covarSet=i.name)
-    }
-    cv_pred %>% do.call('rbind', .) %>%
-      write_csv(glue("out{sep}test_full{sep}CV_{i.name}_{target}.csv"))
-    
-    
     # Full fit for predictions
     
     # Formulas with interactions: errors if missing NcatF levels
@@ -561,6 +432,135 @@ for(i in 1:length(covariate_sets)) {
       mutate(covarSet=i.name)
     
     write_csv(pred.df, glue("out{sep}test_full{sep}pred_{i.name}_{target}.csv"))
+    
+    # Cross-validation by year
+    yrCV <- unique(train.df$year)
+    cv_pred <- map(yrCV, ~NULL)
+    for(k in 1:length(yrCV)) {
+      yr <- yrCV[k]
+      cv_train.df <- train.df %>% filter(year != yr)
+      cv_test.df <- train.df %>% filter(year == yr)
+      
+      # Formulas with interactions: errors if missing NcatF levels
+      form_ord <- makeFormula(cv_train.df, covar_int, "NcatNum | thres(3)")
+      form_01 <- makeFormula(filter(cv_train.df, Nbloom1==0), covar_int, "Nbloom")
+      form_11 <- makeFormula(filter(cv_train.df, Nbloom1==1), covar_int, "Nbloom")
+      
+      # Smoother formulas
+      form_ordLP <- makeFormula(cv_train.df, covar_s, "NcatNum | thres(3)", covar_date,
+                                flist.LP, list(b=s_b, yday=s_yday, p=NULL))
+      form_bernLP <- makeFormula(cv_train.df, covar_s, "Nbloom", covar_date,
+                                 flist.LP, list(b=s_b, yday=s_yday, p=NULL))
+      form_ordP <- makeFormula(cv_train.df, covar_s, "NcatNum | thres(3)", covar_date,
+                               flist.P, list(b=s_b, yday=s_yday, p=s_p))
+      form_bernP <- makeFormula(cv_train.df, covar_s, "Nbloom", covar_date,
+                                flist.P, list(b=s_b, yday=s_yday, p=s_p))
+      
+      cv.ord <- brm(form_ord, data=cv_train.df,
+                    family=cumulative("probit"), prior=priors, 
+                    iter=iter, warmup=warmup, refresh=refresh, init=0,
+                    control=ctrl, chains=chains, cores=chains,
+                    file=glue("out{sep}test_full{sep}ord_CV{k}_{i.name}_{target}"))
+      cv.ordP <- brm(form_ordP, data=cv_train.df, 
+                     family=cumulative("probit"), prior=priors.P, 
+                     iter=iter, warmup=warmup, refresh=refresh, init=0,
+                     control=ctrl, chains=chains, cores=chains,
+                     file=glue("out{sep}test_full{sep}ordP_CV{k}_{i.name}_{target}"))
+      cv.ordLP <- brm(form_ordLP, data=cv_train.df, 
+                      family=cumulative("probit"), prior=priors.LP, 
+                      iter=iter, warmup=warmup, refresh=refresh, init=0,
+                      control=ctrl, chains=chains, cores=chains,
+                      file=glue("out{sep}test_full{sep}ordLP_CV{k}_{i.name}_{target}"))
+      
+      cv.bern01 <- brm(form_01, data=cv_train.df %>% filter(Nbloom1==0),
+                       family=bernoulli("probit"), prior=priors, 
+                       iter=iter, warmup=warmup, refresh=refresh, init=0,
+                       control=ctrl, chains=chains, cores=chains,
+                       file=glue("out{sep}test_full{sep}bern01_CV{k}_{i.name}_{target}"))
+      cv.bernP01 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==0), 
+                        family=bernoulli("probit"), prior=priors.P, 
+                        iter=iter, warmup=warmup, refresh=refresh, init=0,
+                        control=ctrl, chains=chains, cores=chains,
+                        file=glue("out{sep}test_full{sep}bernP01_CV{k}_{i.name}_{target}"))
+      cv.bernLP01 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==0), 
+                         family=bernoulli("probit"), prior=priors.LP, 
+                         iter=iter, warmup=warmup, refresh=refresh, init=0,
+                         control=ctrl, chains=chains, cores=chains,
+                         file=glue("out{sep}test_full{sep}bernLP01_CV{k}_{i.name}_{target}"))
+      cv.bern11 <- brm(form_11, data=cv_train.df %>% filter(Nbloom1==1),
+                       family=bernoulli("probit"), prior=priors, 
+                       iter=iter, warmup=warmup, refresh=refresh, init=0,
+                       control=ctrl, chains=chains, cores=chains,
+                       file=glue("out{sep}test_full{sep}bern11_CV{k}_{i.name}_{target}"))
+      cv.bernP11 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==1), 
+                        family=bernoulli("probit"), prior=priors.P, 
+                        iter=iter, warmup=warmup, refresh=refresh, init=0,
+                        control=ctrl, chains=chains, cores=chains,
+                        file=glue("out{sep}test_full{sep}bernP11_CV{k}_{i.name}_{target}"))
+      cv.bernLP11 <- brm(form_bernLP, data=cv_train.df %>% filter(Nbloom1==1), 
+                         family=bernoulli("probit"), prior=priors.LP, 
+                         iter=iter, warmup=warmup, refresh=refresh, init=0,
+                         control=ctrl, chains=chains, cores=chains,
+                         file=glue("out{sep}test_full{sep}bernLP11_CV{k}_{i.name}_{target}"))
+      
+      # RF
+      rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
+      train.rf <- cv_train.df %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      train.rf01 <- cv_train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      train.rf11 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      test.rf <- cv_test.df %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom)) %>%  as.data.frame()
+      test.rf01 <- cv_test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      test.rf11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+        mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      
+      rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      
+      # Cross-validation predictions
+      cv_test.df01 <- cv_test.df %>% filter(Nbloom1==0) %>% droplevels
+      cv_test.df11 <- cv_test.df %>% filter(Nbloom1==1) %>% droplevels
+      pred.ord <- posterior_epred(cv.ord, newdata=cv_test.df, allow_new_levels=T)
+      pred.ordP <- posterior_epred(cv.ordP, newdata=cv_test.df, allow_new_levels=T)
+      pred.ordLP <- posterior_epred(cv.ordLP, newdata=cv_test.df, allow_new_levels=T)
+      pred.bern01 <- colMeans(posterior_epred(cv.bern01, newdata=cv_test.df01, allow_new_levels=T))
+      pred.bernP01 <- colMeans(posterior_epred(cv.bernP01, newdata=cv_test.df01, allow_new_levels=T))
+      pred.bernLP01 <- colMeans(posterior_epred(cv.bernLP01, newdata=cv_test.df01, allow_new_levels=T)) 
+      pred.rf <- predict(rf, newdata=test.rf, type="prob")[,2]
+      pred.rf_01 <- predict(rf.01, newdata=test.rf01, type="prob")[,2]
+      if(nrow(cv_test.df11) > 0) {
+        pred.bern11 <- colMeans(posterior_epred(cv.bern11, newdata=cv_test.df11, allow_new_levels=T))
+        pred.bernP11 <- colMeans(posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T))
+        pred.bernLP11 <- colMeans(posterior_epred(cv.bernLP11, newdata=cv_test.df11, allow_new_levels=T)) 
+        pred.rf_11 <- predict(rf.11, newdata=test.rf11, type="prob")[,2]
+      } else {
+        pred.bern11 <- numeric(0)
+        pred.bernP11 <- numeric(0)
+        pred.bernLP11 <- numeric(0)
+        pred.rf_11 <- numeric(0)
+      }
+      
+      cv_pred[[k]] <- full_join(
+        cv_test.df %>%
+          mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
+                 ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
+                 ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
+                 rf_mnpr=pred.rf),
+        tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
+               bern_mnpr=c(pred.bern01, pred.bern11),
+               bernP_mnpr=c(pred.bernP01, pred.bernP11),
+               bernLP_mnpr=c(pred.bernLP01, pred.bernLP11),
+               rf_split_mnpr=c(pred.rf_01, pred.rf_11))
+      ) %>%
+        mutate(covarSet=i.name)
+    }
+    cv_pred %>% do.call('rbind', .) %>%
+      write_csv(glue("out{sep}test_full{sep}CV_{i.name}_{target}.csv"))
     
     cat("Finished", target, "\n")
   }
