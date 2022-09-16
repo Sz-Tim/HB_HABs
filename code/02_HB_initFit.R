@@ -10,7 +10,7 @@
 # set up ------------------------------------------------------------------
 
 pkgs <- c("tidyverse", "lubridate", "glue", "brms", 
-          "randomForest", "caret")
+          "randomForest", "caret", "e1071")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
@@ -346,27 +346,35 @@ for(i in length(covariate_sets)) {
                         control=ctrl, chains=chains, cores=chains,
                         file=glue("out{sep}test_allOnly{sep}bernLP11_{i.name}_{target}"))
     
-    # RF
-    rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
-    train.rf <- train.df %>% select(one_of(rf_vars)) %>% 
+    # Machine Learning: Random Forest, Support Vector Machine
+    ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
+    train.ML <- train.df %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    train.rf01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+    train.ML01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    train.rf11 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+    train.ML11 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    test.rf <- test.df %>% select(one_of(rf_vars)) %>% 
+    test.ML <- test.df %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    test.rf01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+    test.ML01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    test.rf11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+    test.ML11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     
-    rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F)
-    rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F)
-    rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F)
+    rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F)
+    rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F)
+    rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F)
     saveRDS(rf, glue("out{sep}test_allOnly{sep}rf_{i.name}_{target}.rds"))
     saveRDS(rf.01, glue("out{sep}test_allOnly{sep}rf01_{i.name}_{target}.rds"))
     saveRDS(rf.11, glue("out{sep}test_allOnly{sep}rf11_{i.name}_{target}.rds"))
+    
+    svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
+    svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
+    svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
+    svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng)
+    saveRDS(svm_, glue("out{sep}test_allOnly{sep}svm_{i.name}_{target}.rds"))
+    saveRDS(svm_01, glue("out{sep}test_allOnly{sep}svm01_{i.name}_{target}.rds"))
+    saveRDS(svm_11, glue("out{sep}test_allOnly{sep}svm11_{i.name}_{target}.rds"))
     
     # Fitted
     fit.ord <- posterior_epred(out.ord)
@@ -384,12 +392,18 @@ for(i in length(covariate_sets)) {
         mutate(ord_mnpr=calc_ord_mnpr(fit.ord, bloomThresh),
                ordP_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh),
                ordLP_mnpr=calc_ord_mnpr(fit.ordLP, bloomThresh),
-               rf_mnpr=rf$votes[,2]),
+               rf_mnpr=rf$votes[,2],
+               svm_mnpr=attr(predict(svm_$best.model, newdata=train.ML[,-1], probability=T),
+                             "probabilities")[,2]),
       tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
              bern_mnpr=c(colMeans(fit.bern01), colMeans(fit.bern11)),
              bernP_mnpr=c(colMeans(fit.bernP01), colMeans(fit.bernP11)),
              bernLP_mnpr=c(colMeans(fit.bernLP01), colMeans(fit.bernLP11)),
-             rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]))
+             rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]),
+             svm_split_mnpr=c(attr(predict(svm_01$best.model, newdata=train.ML01[,-1], probability=T),
+                                   "probabilities")[,2],
+                              attr(predict(svm_11$best.model, newdata=train.ML11[,-1], probability=T),
+                                   "probabilities")[,2]))
     ) %>%
       mutate(covarSet=i.name)
     write_csv(fit.df, glue("out{sep}test_allOnly{sep}fit_{i.name}_{target}.csv"))
@@ -403,18 +417,25 @@ for(i in length(covariate_sets)) {
     pred.bern01 <- colMeans(posterior_epred(out.bern01, newdata=test.df01, allow_new_levels=T))
     pred.bernP01 <- colMeans(posterior_epred(out.bernP01, newdata=test.df01, allow_new_levels=T))
     pred.bernLP01 <- colMeans(posterior_epred(out.bernLP01, newdata=test.df01, allow_new_levels=T)) 
-    pred.rf <- predict(rf, newdata=test.rf, type="prob")[,2]
-    pred.rf_01 <- predict(rf.01, newdata=test.rf01, type="prob")[,2]
+    pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
+    pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
+    pred.svm <- attr(predict(svm_$best.model, newdata=test.ML[,-1], probability=T),
+                     "probabilities")[,2]
+    pred.svm_01 <- attr(predict(svm_01$best.model, newdata=test.ML01[,-1], probability=T),
+                        "probabilities")[,2]
     if(nrow(test.df11) > 0) {
       pred.bern11 <- colMeans(posterior_epred(out.bern11, newdata=test.df11, allow_new_levels=T))
       pred.bernP11 <- colMeans(posterior_epred(out.bernP11, newdata=test.df11, allow_new_levels=T))
       pred.bernLP11 <- colMeans(posterior_epred(out.bernLP11, newdata=test.df11, allow_new_levels=T)) 
-      pred.rf_11 <- predict(rf.11, newdata=test.rf11, type="prob")[,2]
+      pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
+      pred.svm_11 <- attr(predict(svm_11$best.model, newdata=test.ML11[,-1], probability=T),
+                          "probabilities")[,2]
     } else {
       pred.bern11 <- numeric(0)
       pred.bernP11 <- numeric(0)
       pred.bernLP11 <- numeric(0)
       pred.rf_11 <- numeric(0)
+      pred.svm_11 <- numeric(0)
     }
     
     pred.df <- full_join(
@@ -422,12 +443,14 @@ for(i in length(covariate_sets)) {
         mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
                ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
                ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
-               rf_mnpr=pred.rf),
+               rf_mnpr=pred.rf,
+               svm_mnpr=pred.svm),
       tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
              bern_mnpr=c(pred.bern01, pred.bern11),
              bernP_mnpr=c(pred.bernP01, pred.bernP11),
              bernLP_mnpr=c(pred.bernLP01, pred.bernLP11),
-             rf_split_mnpr=c(pred.rf_01, pred.rf_11))
+             rf_split_mnpr=c(pred.rf_01, pred.rf_11),
+             svm_split_mnpr=c(pred.svm_01, pred.svm_11))
     ) %>%
       mutate(covarSet=i.name)
     
@@ -503,24 +526,29 @@ for(i in length(covariate_sets)) {
                          control=ctrl, chains=chains, cores=chains,
                          file=glue("out{sep}test_allOnly{sep}bernLP11_CV{k}_{i.name}_{target}"))
       
-      # RF
-      rf_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
-      train.rf <- cv_train.df %>% select(one_of(rf_vars)) %>% 
+      # Machine Learning: Random Forest, Support Vector Machine
+      ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
+      train.ML <- cv_train.df %>% select(one_of(ML_vars)) %>% 
         mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      train.rf01 <- cv_train.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+      train.ML01 <- cv_train.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
         mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      train.rf11 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+      train.ML11 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
         mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      test.rf <- cv_test.df %>% select(one_of(rf_vars)) %>% 
+      test.ML <- cv_test.df %>% select(one_of(ML_vars)) %>% 
         mutate(Nbloom=factor(Nbloom)) %>%  as.data.frame()
-      test.rf01 <- cv_test.df %>% filter(Nbloom1==0) %>% select(one_of(rf_vars)) %>% 
+      test.ML01 <- cv_test.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
         mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-      test.rf11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(rf_vars)) %>% 
+      test.ML11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
         mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
       
-      rf <- tuneRF(x=train.rf[,-1], y=train.rf[,1], doBest=T, trace=F, plot=F, ntree=1000)
-      rf.01 <- tuneRF(x=train.rf01[,-1], y=train.rf01[,1], doBest=T, trace=F, plot=F, ntree=1000)
-      rf.11 <- tuneRF(x=train.rf11[,-1], y=train.rf11[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F, ntree=1000)
+      
+      svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
+      svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
+      svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
+      svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng)
       
       # Cross-validation predictions
       cv_test.df01 <- cv_test.df %>% filter(Nbloom1==0) %>% droplevels
@@ -531,18 +559,25 @@ for(i in length(covariate_sets)) {
       pred.bern01 <- colMeans(posterior_epred(cv.bern01, newdata=cv_test.df01, allow_new_levels=T))
       pred.bernP01 <- colMeans(posterior_epred(cv.bernP01, newdata=cv_test.df01, allow_new_levels=T))
       pred.bernLP01 <- colMeans(posterior_epred(cv.bernLP01, newdata=cv_test.df01, allow_new_levels=T)) 
-      pred.rf <- predict(rf, newdata=test.rf, type="prob")[,2]
-      pred.rf_01 <- predict(rf.01, newdata=test.rf01, type="prob")[,2]
+      pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
+      pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
+      pred.svm <- attr(predict(svm_$best.model, newdata=test.ML[,-1], probability=T),
+                       "probabilities")[,2]
+      pred.svm_01 <- attr(predict(svm_01$best.model, newdata=test.ML01[,-1], probability=T),
+                          "probabilities")[,2]
       if(nrow(cv_test.df11) > 0) {
         pred.bern11 <- colMeans(posterior_epred(cv.bern11, newdata=cv_test.df11, allow_new_levels=T))
         pred.bernP11 <- colMeans(posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T))
         pred.bernLP11 <- colMeans(posterior_epred(cv.bernLP11, newdata=cv_test.df11, allow_new_levels=T)) 
-        pred.rf_11 <- predict(rf.11, newdata=test.rf11, type="prob")[,2]
+        pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
+        pred.svm_11 <- attr(predict(svm_11$best.model, newdata=test.ML11[,-1], probability=T),
+                            "probabilities")[,2]
       } else {
         pred.bern11 <- numeric(0)
         pred.bernP11 <- numeric(0)
         pred.bernLP11 <- numeric(0)
         pred.rf_11 <- numeric(0)
+        pred.svm_11 <- numeric(0)
       }
       
       cv_pred[[k]] <- full_join(
@@ -550,12 +585,14 @@ for(i in length(covariate_sets)) {
           mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh),
                  ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh),
                  ordLP_mnpr=calc_ord_mnpr(pred.ordLP, bloomThresh),
-                 rf_mnpr=pred.rf),
+                 rf_mnpr=pred.rf,
+                 svm_mnpr=pred.svm),
         tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
                bern_mnpr=c(pred.bern01, pred.bern11),
                bernP_mnpr=c(pred.bernP01, pred.bernP11),
                bernLP_mnpr=c(pred.bernLP01, pred.bernLP11),
-               rf_split_mnpr=c(pred.rf_01, pred.rf_11))
+               rf_split_mnpr=c(pred.rf_01, pred.rf_11),
+               svm_split_mnpr=c(pred.svm_01, pred.svm_11))
       ) %>%
         mutate(covarSet=i.name)
     }
