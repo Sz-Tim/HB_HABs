@@ -279,8 +279,8 @@ for(i in length(covariate_sets)) {
     
     write_csv(target.df, glue("out{sep}test_allOnly{sep}dataset_{i.name}_{target}.csv"))
     
-    train.df <- target.df %>% filter(year <= 2017)
-    test.df <- target.df %>% filter(year > 2017)
+    train.df <- target.df %>% filter(year <= 2019)
+    test.df <- target.df %>% filter(year > 2019)
     bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
     
     # Full fit for predictions
