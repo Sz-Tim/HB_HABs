@@ -99,7 +99,7 @@ site.100k <-  read_csv("data/fsa_site_pairwise_distances.csv") %>%
 # >0.85 cor(time) = water
 # waterDir is more variable across all 4
 covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
-            "precip_L_wk", 
+            "precip_L_wk", "tempStrat_L_wk", "tempStrat_R_wk",
             "wind_L_wk", "windDir_L_wk",
             "water_L_wk", "waterDir_L_wk", 
             "water_R_wk", "waterDir_R_wk",
@@ -108,6 +108,7 @@ covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
 covar_int.all <- c(
   "ydayCos", "ydaySin",
   paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
+           "tempStrat_L_wk", "tempStrat_R_wk",
            "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
            "fetch", #"influxwk", ",
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
@@ -122,6 +123,7 @@ covar_int.all <- c(
 )
 covar_s.all <- c(
   "tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
+  "tempStrat_L_wk", "tempStrat_R_wk",
   "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
   "fetch", #"influxwk", 
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",

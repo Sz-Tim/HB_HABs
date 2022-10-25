@@ -10,7 +10,7 @@
 
 # devtools::install_github("https://github.com/Sz-Tim/WeStCOMS")
 pkgs <- c("tidyverse", "glue", "lubridate", "sf", "jsonlite", "WeStCOMS")
-invisible(lapply(pkgs, library, character.only=T))
+lapply(pkgs, library, character.only=T)
 
 cores <- 60
 nLags <- 7
@@ -125,10 +125,22 @@ for(i in 0:nLags) {
   sampling.local_i %>%
     mutate(date=str_remove_all(as.character(date-i), "-")) %>%
     extractHydroVars(., westcoms.dir, var.df$var, var.df$dayFn, var.df$depthFn,
-                     cores=cores, progress=T) %>%
+                     cores=cores, progress=T, returnFullDf=T) %>%
     rename_with(~paste0(.x, "_L", i), .cols=any_of(var.df$var)) %>%
+    mutate(depth=0) %>%
+    extractHydroVars(., westcoms.dir, "temp", list(mean), NULL, 
+                     cores=cores, progress=T, returnFullDf=T) %>%
+    rename(temp_0m=temp) %>%
+    mutate(depth=20) %>%
+    extractHydroVars(., westcoms.dir, "temp", list(mean), NULL, 
+                     cores=cores, progress=T, returnFullDf=T) %>%
+    rename(temp_20m=temp) %>%
+    mutate(tempStrat20m=temp_20m-temp_0m) %>%
+    rename_with(~paste0(.x, "_L", i), .cols="tempStrat20m") %>%
+    select(obs.id, contains("_L")) %>%
     write_csv(glue("data{sep}hydro_L{i}.csv"))
 }
+
 
 
 
@@ -138,12 +150,23 @@ sampling.regional_i <- sampling.regional %>%
   select(obs.id, site.id, date, depth, grid, site.elem, starts_with("trinode"))
 
 for(i in 0:nLags) {
-  cat("Starting lag", i, "local\n")
+  cat("Starting lag", i, "regional\n")
   sampling.regional_i %>%
     mutate(date=str_remove_all(as.character(date-i), "-")) %>%
     extractHydroVars(., westcoms.dir, var.df$var, var.df$dayFn, var.df$depthFn,
-                     regional=T, cores=cores, progress=T) %>%
+                     regional=T, cores=cores, progress=T, returnFullDf=T) %>%
     rename_with(~paste0(.x, "_R", i), .cols=any_of(var.df$var)) %>%
+    mutate(depth=0) %>%
+    extractHydroVars(., westcoms.dir, "temp", list(mean), NULL, 
+                     regional=T, cores=cores, progress=T, returnFullDf=T) %>%
+    rename(temp_0m=temp) %>%
+    mutate(depth=20) %>%
+    extractHydroVars(., westcoms.dir, "temp", list(mean), NULL, 
+                     regional=T, cores=cores, progress=T, returnFullDf=T) %>%
+    rename(temp_20m=temp) %>%
+    mutate(tempStrat20m=temp_20m-temp_0m) %>%
+    rename_with(~paste0(.x, "_R", i), .cols="tempStrat20m") %>%
+    select(obs.id, contains("_R")) %>%
     write_csv(glue("data{sep}hydro_R{i}.csv"))
 }
 
