@@ -166,7 +166,9 @@ for(i in 0:nLags) {
     rename(temp_20m=temp) %>%
     mutate(tempStrat20m=temp_20m-temp_0m) %>%
     rename_with(~paste0(.x, "_R", i), .cols="tempStrat20m") %>%
-    select(obs.id, contains("_R")) %>%
+    group_by(obs.id) %>%
+    summarise(across(contains("_R"), mean)) %>%
+    ungroup %>%
     write_csv(glue("data{sep}hydro_R{i}.csv"))
 }
 
