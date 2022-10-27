@@ -92,3 +92,32 @@ calc_ord_mnpr <- function(pred.ord, bloomThresh) {
 }
 
 
+
+
+
+
+
+best_xgb <- function(df_train, max_depth=2:6, eta=seq(0.01, 2, by=0.01)) {
+  xg_grid <- expand_grid(max_depth=max_depth, eta=eta) %>%
+    mutate(LL_test=NA)
+  for (j in 1:nrow(xg_grid)) {
+    set.seed(123)
+    m_xgb_untuned <- xgb.cv(
+      data=as.matrix(df_train[,-1]),
+      label=as.numeric(df_train[,1])-1,
+      nrounds=1000,
+      objective="binary:logistic",
+      early_stopping_rounds=4,
+      nfold=5,
+      max_depth=xg_grid$max_depth[j],
+      eta=xg_grid$eta[j],
+      verbose=F
+    )
+    xg_grid$LL_test[j] <- m_xgb_untuned$evaluation_log$test_logloss_mean[m_xgb_untuned$best_iteration]
+  }  
+  best.par <- filter(xg_grid, LL_test==min(LL_test))
+  out <- xgboost(data=as.matrix(df_train[,-1]), label=as.numeric(df_train[,1])-1, 
+                 max.depth=best.par$max_depth, eta=best.par$eta, 
+                 nthread=6, nrounds=10, objective="binary:logistic")
+  return(out)
+}
