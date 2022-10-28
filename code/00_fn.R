@@ -112,7 +112,8 @@ best_xgb <- function(df_train, max_depth=2:6, eta=seq(0.01, 2, by=0.01),
       nfold=5,
       max_depth=xg_grid$max_depth[j],
       eta=xg_grid$eta[j],
-      verbose=F
+      verbose=F,
+      nthread=nthread
     )
     xg_grid$LL_test[j] <- m_xgb_untuned$evaluation_log$test_logloss_mean[m_xgb_untuned$best_iteration]
   }  
