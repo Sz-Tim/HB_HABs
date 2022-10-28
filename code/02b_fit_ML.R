@@ -88,7 +88,7 @@ for(i in length(covariate_sets)) {
     
     # Full fit for predictions
     # Machine Learning: Random Forest, Support Vector Machine, XGBoost
-    ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
+    ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covars)
     train.ML <- train.df %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
     train.ML01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
