@@ -239,7 +239,7 @@ for(i in length(covariate_sets)) {
                           "probabilities")[,2]
       pred.xgb <- predict(xg, as.matrix(test.ML[,-1]))
       pred.xgb_01 <- predict(xg.01, as.matrix(test.ML01[,-1]))
-      if(nrow(cv_test.df11) > 0) {
+      if(nrow(test.ML11) > 0) {
         pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
         pred.svm_11 <- attr(predict(svm_11$best.model, newdata=test.ML11[,-1], probability=T),
                             "probabilities")[,2]
