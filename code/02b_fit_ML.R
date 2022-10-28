@@ -86,6 +86,101 @@ for(i in length(covariate_sets)) {
     # TODO: Tune each method....
     # https://blog.alpha-analysis.com/search/label/R
     
+    # Full fit for predictions
+    # Machine Learning: Random Forest, Support Vector Machine, XGBoost
+    ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
+    train.ML <- train.df %>% select(one_of(ML_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    train.ML01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    train.ML11 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    test.ML <- test.df %>% select(one_of(ML_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    test.ML01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    test.ML11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
+      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    
+    rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F)
+    rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F)
+    rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F)
+    saveRDS(rf, glue("out{sep}full{sep}rf_{i.name}_{target}.rds"))
+    saveRDS(rf.01, glue("out{sep}full{sep}rf01_{i.name}_{target}.rds"))
+    saveRDS(rf.11, glue("out{sep}full{sep}rf11_{i.name}_{target}.rds"))
+    
+    svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
+    svm_rng <- list(cost=10^(-2:2), gamma=2^(-2:2))
+    svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
+    svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
+    svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng)
+    saveRDS(svm_, glue("out{sep}full{sep}svm_{i.name}_{target}.rds"))
+    saveRDS(svm_01, glue("out{sep}full{sep}svm01_{i.name}_{target}.rds"))
+    saveRDS(svm_11, glue("out{sep}full{sep}svm11_{i.name}_{target}.rds"))
+    
+    xg <- best_xgb(train.ML)
+    xg.01 <- best_xgb(train.ML01)
+    xg.11 <- best_xgb(train.ML11)
+    saveRDS(xg, glue("out{sep}full{sep}xgb_{i.name}_{target}.rds"))
+    saveRDS(xg.01, glue("out{sep}full{sep}xgb01_{i.name}_{target}.rds"))
+    saveRDS(xg.11, glue("out{sep}full{sep}xgb11_{i.name}_{target}.rds"))
+    
+    # Fitted
+    fit.df <- full_join(
+      train.df %>%
+        mutate(rf_mnpr=rf$votes[,2],
+               svm_mnpr=attr(predict(svm_$best.model, newdata=train.ML[,-1], probability=T),
+                             "probabilities")[,2],
+               xgb_mnpr=predict(xg, as.matrix(train.ML[,-1]))),
+      tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
+             rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]),
+             svm_split_mnpr=c(attr(predict(svm_01$best.model, newdata=train.ML01[,-1], probability=T),
+                                   "probabilities")[,2],
+                              attr(predict(svm_11$best.model, newdata=train.ML11[,-1], probability=T),
+                                   "probabilities")[,2]),
+             xgb_split_mnpr=c(predict(xg.01, as.matrix(train.ML01[,-1])),
+                              predict(xg.11, as.matrix(train.ML11[,-1]))))
+    ) %>%
+      mutate(covarSet=i.name)
+    write_csv(fit.df, glue("out{sep}full{sep}fit_ML_{i.name}_{target}.csv"))
+    
+    # OOS predictions
+    test.df01 <- test.df %>% filter(Nbloom1==0) %>% droplevels
+    test.df11 <- test.df %>% filter(Nbloom1==1) %>% droplevels
+    pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
+    pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
+    pred.svm <- attr(predict(svm_$best.model, newdata=test.ML[,-1], probability=T),
+                     "probabilities")[,2]
+    pred.svm_01 <- attr(predict(svm_01$best.model, newdata=test.ML01[,-1], probability=T),
+                        "probabilities")[,2]
+    pred.xgb <- predict(xg, as.matrix(test.ML[,-1]))
+    pred.xgb_01 <- predict(xg.01, as.matrix(test.ML01[,-1]))
+    if(nrow(test.df11) > 0) {
+      pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
+      pred.svm_11 <- attr(predict(svm_11$best.model, newdata=test.ML11[,-1], probability=T),
+                          "probabilities")[,2]
+      pred.xgb_11 <- predict(xg.11, as.matrix(test.ML11[,-1]))
+    } else {
+      pred.rf_11 <- numeric(0)
+      pred.svm_11 <- numeric(0)
+      pred.xgb_11 <- numeric(0)
+    }
+    
+    pred.df <- full_join(
+      test.df %>%
+        mutate(rf_mnpr=pred.rf,
+               svm_mnpr=pred.svm,
+               xgb_mnpr=pred.xgb),
+      tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
+             rf_split_mnpr=c(pred.rf_01, pred.rf_11),
+             svm_split_mnpr=c(pred.svm_01, pred.svm_11),
+             xgb_split_mnpr=c(pred.xgb_01, pred.xgb_11))
+    ) %>%
+      mutate(covarSet=i.name)
+    
+    write_csv(pred.df, glue("out{sep}full{sep}pred_ML_{i.name}_{target}.csv"))
+    
+    
     # Cross-validation by year
     yrCV <- unique(train.df$year)
     cv_pred <- map(yrCV, ~NULL)
@@ -158,99 +253,6 @@ for(i in length(covariate_sets)) {
     cv_pred %>% do.call('rbind', .) %>%
       write_csv(glue("out{sep}full{sep}CV_ML_{i.name}_{target}.csv"))
     
-    
-    # Full fit for predictions
-    # Machine Learning: Random Forest, Support Vector Machine, XGBoost
-    ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covar_date, covar_s)
-    train.ML <- train.df %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    train.ML01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    train.ML11 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    test.ML <- test.df %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    test.ML01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    test.ML11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
-    
-    rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F)
-    rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F)
-    rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F)
-    saveRDS(rf, glue("out{sep}full{sep}rf_{i.name}_{target}.rds"))
-    saveRDS(rf.01, glue("out{sep}full{sep}rf01_{i.name}_{target}.rds"))
-    saveRDS(rf.11, glue("out{sep}full{sep}rf11_{i.name}_{target}.rds"))
-    
-    svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
-    svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
-    svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
-    svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng)
-    saveRDS(svm_, glue("out{sep}full{sep}svm_{i.name}_{target}.rds"))
-    saveRDS(svm_01, glue("out{sep}full{sep}svm01_{i.name}_{target}.rds"))
-    saveRDS(svm_11, glue("out{sep}full{sep}svm11_{i.name}_{target}.rds"))
-    
-    xg <- best_xgb(train.ML)
-    xg.01 <- best_xgb(train.ML01)
-    xg.11 <- best_xgb(train.ML11)
-    saveRDS(xg, glue("out{sep}full{sep}xgb_{i.name}_{target}.rds"))
-    saveRDS(xg.01, glue("out{sep}full{sep}xgb01_{i.name}_{target}.rds"))
-    saveRDS(xg.11, glue("out{sep}full{sep}xgb11_{i.name}_{target}.rds"))
-    
-    # Fitted
-    fit.df <- full_join(
-      train.df %>%
-        mutate(rf_mnpr=rf$votes[,2],
-               svm_mnpr=attr(predict(svm_$best.model, newdata=train.ML[,-1], probability=T),
-                             "probabilities")[,2],
-               xgb_mnpr=predict(xg, as.matrix(train.ML[,-1]))),
-      tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
-             rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]),
-             svm_split_mnpr=c(attr(predict(svm_01$best.model, newdata=train.ML01[,-1], probability=T),
-                                   "probabilities")[,2],
-                              attr(predict(svm_11$best.model, newdata=train.ML11[,-1], probability=T),
-                                   "probabilities")[,2]),
-             xgb_split_mnpr=c(predict(xg.01, as.matrix(train.ML01[,-1])),
-                              predict(xg.11, as.matrix(train.ML11[,-1]))))
-    ) %>%
-      mutate(covarSet=i.name)
-    write_csv(fit.df, glue("out{sep}full{sep}fit_ML_{i.name}_{target}.csv"))
-    
-    # OOS predictions
-    test.df01 <- test.df %>% filter(Nbloom1==0) %>% droplevels
-    test.df11 <- test.df %>% filter(Nbloom1==1) %>% droplevels
-    pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
-    pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
-    pred.svm <- attr(predict(svm_$best.model, newdata=test.ML[,-1], probability=T),
-                     "probabilities")[,2]
-    pred.svm_01 <- attr(predict(svm_01$best.model, newdata=test.ML01[,-1], probability=T),
-                        "probabilities")[,2]
-    pred.xgb <- predict(xg, as.matrix(test.ML[,-1]))
-    pred.xgb_01 <- predict(xg.01, as.matrix(test.ML01[,-1]))
-    if(nrow(test.df11) > 0) {
-      pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
-      pred.svm_11 <- attr(predict(svm_11$best.model, newdata=test.ML11[,-1], probability=T),
-                          "probabilities")[,2]
-      pred.xgb_11 <- predict(xg.11, as.matrix(test.ML11[,-1]))
-    } else {
-      pred.rf_11 <- numeric(0)
-      pred.svm_11 <- numeric(0)
-      pred.xgb_11 <- numeric(0)
-    }
-    
-    pred.df <- full_join(
-      test.df %>%
-        mutate(rf_mnpr=pred.rf,
-               svm_mnpr=pred.svm,
-               xgb_mnpr=pred.xgb),
-      tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
-             rf_split_mnpr=c(pred.rf_01, pred.rf_11),
-             svm_split_mnpr=c(pred.svm_01, pred.svm_11),
-             xgb_split_mnpr=c(pred.xgb_01, pred.xgb_11))
-    ) %>%
-      mutate(covarSet=i.name)
-    
-    write_csv(pred.df, glue("out{sep}full{sep}pred_ML_{i.name}_{target}.csv"))
     
     cat("Finished", target, "\n")
   }
