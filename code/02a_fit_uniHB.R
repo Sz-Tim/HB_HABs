@@ -15,6 +15,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 # Model details
+rebalance_pr0 <- c(NA, 0.4)[1]
 ctrl <- list(adapt_delta=0.95, max_treedepth=20)
 chains <- 4
 iter <- 2000
@@ -202,6 +203,10 @@ for(i in length(covariate_sets)) {
   
   for(sp in 1) {
     target <- species[sp]
+    f.prefix <- glue("out{sep}full{sep}")
+    f.suffix <- glue("{i.name}_{target}",
+                     "{ifelse(is.na(rebalance_pr0),'',paste0('_rebal',rebalance_pr0*100))}")
+    
     target.tf <- thresh.df %>% filter(hab_parameter==target)
     
     target.df <- sampling.df %>%
@@ -264,7 +269,17 @@ for(i in length(covariate_sets)) {
       } 
     }
     
-    write_csv(target.df, glue("out{sep}full{sep}dataset_{i.name}_{target}.csv"))
+    write_csv(target.df, glue("{f.prefix}dataset_{i.name}_{target}.csv"))
+    
+    target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
+    if(!is.na(rebalance_pr0)) {
+      i_0 <- which(target.df$Nbloom==0)
+      i_1 <- which(target.df$Nbloom==1)
+      i_0_rb <- sample(i_0, floor(nrow(target.df)*rebalance_pr0), replace=T)
+      i_1_rb <- sample(i_1, ceiling(nrow(target.df)*(1-rebalance_pr0)), replace=T)
+      target.df <- target.df[c(i_0_rb, i_1_rb),] 
+      write_csv(target.df, glue("{f.prefix}dataset_{f.suffix}_HBuv.csv")) 
+    }
     
     train.df <- target.df %>% filter(year <= 2019)
     test.df <- target.df %>% filter(year > 2019)
@@ -287,32 +302,32 @@ for(i in length(covariate_sets)) {
                    family=cumulative("probit"), prior=priors, 
                    iter=iter, warmup=warmup, refresh=refresh, init=0,
                    control=ctrl, chains=chains, cores=chains,
-                   file=glue("out{sep}full{sep}ord_{i.name}_{target}"))
+                   file=glue("{f.prefix}ord_{f.suffix}"))
     out.ordP <- brm(form_ordP, data=train.df, 
                     family=cumulative("probit"), prior=priors.P, 
                     iter=iter, warmup=warmup, refresh=refresh, init=0,
                     control=ctrl, chains=chains, cores=chains,
-                    file=glue("out{sep}full{sep}ordP_{i.name}_{target}"))
+                    file=glue("{f.prefix}ordP_{f.suffix}"))
     out.bern01 <- brm(form_01, data=train.df %>% filter(Nbloom1==0),
                       family=bernoulli("probit"), prior=priors, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                       control=ctrl, chains=chains, cores=chains,
-                      file=glue("out{sep}full{sep}bern01_{i.name}_{target}"))
+                      file=glue("{f.prefix}bern01_{f.suffix}"))
     out.bernP01 <- brm(form_bernP, data=train.df %>% filter(Nbloom1==0), 
                        family=bernoulli("probit"), prior=priors.P, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}full{sep}bernP01_{i.name}_{target}"))
+                       file=glue("{f.prefix}bernP01_{f.suffix}"))
     out.bern11 <- brm(form_11, data=train.df %>% filter(Nbloom1==1),
                       family=bernoulli("probit"), prior=priors, 
                       iter=iter, warmup=warmup, refresh=refresh, init=0,
                       control=ctrl, chains=chains, cores=chains,
-                      file=glue("out{sep}full{sep}bern11_{i.name}_{target}"))
+                      file=glue("{f.prefix}bern11_{f.suffix}"))
     out.bernP11 <- brm(form_bernP, data=train.df %>% filter(Nbloom1==1), 
                        family=bernoulli("probit"), prior=priors.P, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}full{sep}bernP11_{i.name}_{target}"))
+                       file=glue("{f.prefix}bernP11_{f.suffix}"))
     
     
     # Fitted
@@ -332,7 +347,7 @@ for(i in length(covariate_sets)) {
              bernP_mnpr=c(colMeans(fit.bernP01), colMeans(fit.bernP11)))
     ) %>%
       mutate(covarSet=i.name)
-    write_csv(fit.df, glue("out{sep}full{sep}fit_HBuv_{i.name}_{target}.csv"))
+    write_csv(fit.df, glue("{f.prefix}fit_HBuv_{f.suffix}.csv"))
     
     # OOS predictions
     test.df01 <- test.df %>% filter(Nbloom1==0) %>% droplevels
@@ -359,7 +374,7 @@ for(i in length(covariate_sets)) {
     ) %>%
       mutate(covarSet=i.name)
     
-    write_csv(pred.df, glue("out{sep}full{sep}pred_HBuv_{i.name}_{target}.csv"))
+    write_csv(pred.df, glue("{f.prefix}pred_HBuv_{f.suffix}.csv"))
     
     # Cross-validation by year
     yrCV <- unique(train.df$year)
@@ -384,32 +399,32 @@ for(i in length(covariate_sets)) {
                     family=cumulative("probit"), prior=priors, 
                     iter=iter, warmup=warmup, refresh=refresh, init=0,
                     control=ctrl, chains=chains, cores=chains,
-                    file=glue("out{sep}full{sep}ord_CV{k}_{i.name}_{target}"))
+                    file=glue("{f.prefix}ord_CV{k}_{f.suffix}"))
       cv.ordP <- brm(form_ordP, data=cv_train.df, 
                      family=cumulative("probit"), prior=priors.P, 
                      iter=iter, warmup=warmup, refresh=refresh, init=0,
                      control=ctrl, chains=chains, cores=chains,
-                     file=glue("out{sep}full{sep}ordP_CV{k}_{i.name}_{target}"))
+                     file=glue("{f.prefix}ordP_CV{k}_{f.suffix}"))
       cv.bern01 <- brm(form_01, data=cv_train.df %>% filter(Nbloom1==0),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}full{sep}bern01_CV{k}_{i.name}_{target}"))
+                       file=glue("{f.prefix}bern01_CV{k}_{f.suffix}"))
       cv.bernP01 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==0), 
                         family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}full{sep}bernP01_CV{k}_{i.name}_{target}"))
+                        file=glue("{f.prefix}bernP01_CV{k}_{f.suffix}"))
       cv.bern11 <- brm(form_11, data=cv_train.df %>% filter(Nbloom1==1),
                        family=bernoulli("probit"), prior=priors, 
                        iter=iter, warmup=warmup, refresh=refresh, init=0,
                        control=ctrl, chains=chains, cores=chains,
-                       file=glue("out{sep}full{sep}bern11_CV{k}_{i.name}_{target}"))
+                       file=glue("{f.prefix}bern11_CV{k}_{f.suffix}"))
       cv.bernP11 <- brm(form_bernP, data=cv_train.df %>% filter(Nbloom1==1), 
                         family=bernoulli("probit"), prior=priors.P, 
                         iter=iter, warmup=warmup, refresh=refresh, init=0,
                         control=ctrl, chains=chains, cores=chains,
-                        file=glue("out{sep}full{sep}bernP11_CV{k}_{i.name}_{target}"))
+                        file=glue("{f.prefix}bernP11_CV{k}_{f.suffix}"))
       
       # Cross-validation predictions
       cv_test.df01 <- cv_test.df %>% filter(Nbloom1==0) %>% droplevels
@@ -437,7 +452,7 @@ for(i in length(covariate_sets)) {
         mutate(covarSet=i.name)
     }
     cv_pred %>% do.call('rbind', .) %>%
-      write_csv(glue("out{sep}full{sep}CV_HBuv_{i.name}_{target}.csv"))
+      write_csv(glue("{f.prefix}CV_HBuv_{f.suffix}.csv"))
     
     cat("Finished", target, "\n")
   }

@@ -16,6 +16,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 # Model details
+rebalance_pr0 <- c(NA, 0.4)[2]
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
@@ -76,8 +77,19 @@ for(i in length(covariate_sets)) {
   
   for(sp in 1) {
     target <- species[sp]
+    f.prefix <- glue("out{sep}full{sep}")
+    f.suffix <- glue("{i.name}_{target}",
+                     "{ifelse(is.na(rebalance_pr0),'',paste0('_rebal',rebalance_pr0*100))}")
     
-    target.df <- read_csv(glue("out{sep}full{sep}dataset_{i.name}_{target}.csv"))
+    target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
+    if(!is.na(rebalance_pr0)) {
+      i_0 <- which(target.df$Nbloom==0)
+      i_1 <- which(target.df$Nbloom==1)
+      i_0_rb <- sample(i_0, floor(nrow(target.df)*rebalance_pr0), replace=T)
+      i_1_rb <- sample(i_1, ceiling(nrow(target.df)*(1-rebalance_pr0)), replace=T)
+      target.df <- target.df[c(i_0_rb, i_1_rb),] 
+      write_csv(target.df, glue("{f.prefix}dataset_{f.suffix}_ML.csv")) 
+    }
     
     train.df <- target.df %>% filter(year <= 2019)
     test.df <- target.df %>% filter(year > 2019)
@@ -105,25 +117,25 @@ for(i in length(covariate_sets)) {
     rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F)
     rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F)
     rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F)
-    saveRDS(rf, glue("out{sep}full{sep}rf_{i.name}_{target}.rds"))
-    saveRDS(rf.01, glue("out{sep}full{sep}rf01_{i.name}_{target}.rds"))
-    saveRDS(rf.11, glue("out{sep}full{sep}rf11_{i.name}_{target}.rds"))
+    saveRDS(rf, glue("{f.prefix}rf_{f.suffix}.rds"))
+    saveRDS(rf.01, glue("{f.prefix}rf01_{f.suffix}.rds"))
+    saveRDS(rf.11, glue("{f.prefix}rf11_{f.suffix}.rds"))
     
     svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
     svm_rng <- list(cost=10^(-2:2), gamma=2^(-2:2))
     svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
     svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
     svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng)
-    saveRDS(svm_, glue("out{sep}full{sep}svm_{i.name}_{target}.rds"))
-    saveRDS(svm_01, glue("out{sep}full{sep}svm01_{i.name}_{target}.rds"))
-    saveRDS(svm_11, glue("out{sep}full{sep}svm11_{i.name}_{target}.rds"))
+    saveRDS(svm_, glue("{f.prefix}svm_{f.suffix}.rds"))
+    saveRDS(svm_01, glue("{f.prefix}svm01_{f.suffix}.rds"))
+    saveRDS(svm_11, glue("{f.prefix}svm11_{f.suffix}.rds"))
     
     xg <- best_xgb(train.ML)
     xg.01 <- best_xgb(train.ML01)
     xg.11 <- best_xgb(train.ML11)
-    saveRDS(xg, glue("out{sep}full{sep}xgb_{i.name}_{target}.rds"))
-    saveRDS(xg.01, glue("out{sep}full{sep}xgb01_{i.name}_{target}.rds"))
-    saveRDS(xg.11, glue("out{sep}full{sep}xgb11_{i.name}_{target}.rds"))
+    saveRDS(xg, glue("{f.prefix}xgb_{f.suffix}.rds"))
+    saveRDS(xg.01, glue("{f.prefix}xgb01_{f.suffix}.rds"))
+    saveRDS(xg.11, glue("{f.prefix}xgb11_{f.suffix}.rds"))
     
     # Fitted
     fit.df <- full_join(
@@ -142,7 +154,7 @@ for(i in length(covariate_sets)) {
                               predict(xg.11, as.matrix(train.ML11[,-1]))))
     ) %>%
       mutate(covarSet=i.name)
-    write_csv(fit.df, glue("out{sep}full{sep}fit_ML_{i.name}_{target}.csv"))
+    write_csv(fit.df, glue("{f.prefix}fit_ML_{f.suffix}.csv"))
     
     # OOS predictions
     test.df01 <- test.df %>% filter(Nbloom1==0) %>% droplevels
@@ -178,7 +190,7 @@ for(i in length(covariate_sets)) {
     ) %>%
       mutate(covarSet=i.name)
     
-    write_csv(pred.df, glue("out{sep}full{sep}pred_ML_{i.name}_{target}.csv"))
+    write_csv(pred.df, glue("{f.prefix}pred_ML_{f.suffix}.csv"))
     
     
     # Cross-validation by year
@@ -251,7 +263,7 @@ for(i in length(covariate_sets)) {
         mutate(covarSet=i.name)
     }
     cv_pred %>% do.call('rbind', .) %>%
-      write_csv(glue("out{sep}full{sep}CV_ML_{i.name}_{target}.csv"))
+      write_csv(glue("{f.prefix}CV_ML_{f.suffix}.csv"))
     
     
     cat("Finished", target, "\n")
