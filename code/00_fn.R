@@ -75,6 +75,9 @@ makeFormula <- function(data.df, covs, resp, covs_date=NULL, flist=NULL, sTerms=
 }
 
 
+
+
+
 calc_ord_mnpr <- function(pred.ord, bloomThresh) {
   tibble(pr0=c(colMeans(pred.ord[,,1,drop=F])),
          pr1=c(colMeans(pred.ord[,,2,drop=F])),
