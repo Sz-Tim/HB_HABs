@@ -35,7 +35,6 @@ sp.i <- read_csv("data/sp_i.csv")
 species <- sp.i$abbr
 
 data.df <- dir("out/full", "dataset.*csv", full.names=T) %>% 
-  grep("rebal", ., value=T, invert=ifelse(is.na(rebalance_pr0), T, F)) %>%
   map_dfr(~read_csv(.x, show_col_type=F) %>%
             mutate(month=lubridate::month(date),
                    week=lubridate::week(date)) %>%
