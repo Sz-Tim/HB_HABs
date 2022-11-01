@@ -15,7 +15,6 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 # Model details
-rebalance_pr0 <- c(NA, 0.4)[1]
 ctrl <- list(adapt_delta=0.95, max_treedepth=20)
 chains <- 4
 iter <- 2000
@@ -105,8 +104,7 @@ covar_s <- grep(i.covs, covar_s.all, value=T)
 covar_date <- NULL
 
 f.prefix <- glue("out{sep}full{sep}")
-f.suffix <- glue("{i.name}",
-                 "{ifelse(is.na(rebalance_pr0),'',paste0('_rebal',rebalance_pr0*100))}")
+f.suffix <- glue("{i.name}")
 
 # Smoothers
 s_b <- glue("b{covar_s}") 
@@ -212,7 +210,6 @@ out.ordP <- brm(reduce(form_ordP, `+`) + set_rescor(FALSE),
 
 # Evaluation set up
 data.sp <- dir("out/full", "dataset.*csv", full.names=T) %>% 
-  grep("rebal", ., value=T, invert=ifelse(is.na(rebalance_pr0), T, F)) %>%
   map(read_csv)
 train.sp <- map(data.sp, ~filter(.x, year <= 2019))
 test.sp <- map(data.sp, ~filter(.x, year > 2019))
@@ -231,8 +228,7 @@ walk(1:nrow(sp.i),
              MVordP_mnpr=calc_ord_mnpr(fits.ordP[[.x]], bloomThresh[[.x]]),
              MVbern_mnpr=colMeans(fits.bern[[.x]]),
              MVbernP_mnpr=colMeans(fits.bernP[[.x]]),
-             covarSet=i.name,
-             rebal_pr0=rebalance_pr0) %>%
+             covarSet=i.name) %>%
       write_csv(glue("{f.prefix}fit_HBmv_{sp.i$full[.x]}_all.csv"))) 
 
 
@@ -300,7 +296,6 @@ for(k in 1:length(yrCV)) {
   
   # Evaluation set up
   data.sp <- dir("out/full", "dataset.*csv", full.names=T) %>% 
-    grep("rebal", ., value=T, invert=ifelse(is.na(rebalance_pr0), T, F)) %>%
     map(read_csv)
   cv_test.sp <- map(data.sp, ~filter(.x, year==yr))
   bloomThresh <- map(data.sp, ~max((!.x$Nbloom)*.x$NcatNum)) 

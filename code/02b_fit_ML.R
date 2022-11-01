@@ -16,7 +16,6 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 # Model details
-rebalance_pr0 <- c(NA, 0.4)[2]
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
@@ -62,18 +61,9 @@ for(i in length(covariate_sets)) {
   for(sp in 1) {
     target <- species[sp]
     f.prefix <- glue("out{sep}full{sep}")
-    f.suffix <- glue("{i.name}_{target}",
-                     "{ifelse(is.na(rebalance_pr0),'',paste0('_rebal',rebalance_pr0*100))}")
+    f.suffix <- glue("{i.name}_{target}")
     
     target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
-    if(!is.na(rebalance_pr0)) {
-      i_0 <- which(target.df$Nbloom==0)
-      i_1 <- which(target.df$Nbloom==1)
-      i_0_rb <- sample(i_0, floor(nrow(target.df)*rebalance_pr0), replace=T)
-      i_1_rb <- sample(i_1, ceiling(nrow(target.df)*(1-rebalance_pr0)), replace=T)
-      target.df <- target.df[c(i_0_rb, i_1_rb),] 
-      write_csv(target.df, glue("{f.prefix}dataset_{f.suffix}_ML.csv")) 
-    }
     
     train.df <- target.df %>% filter(year <= 2019)
     test.df <- target.df %>% filter(year > 2019)
@@ -135,8 +125,7 @@ for(i in length(covariate_sets)) {
                               predict(xg.11, as.matrix(train.ML11[,-1]))))
     ) %>%
       mutate(covarSet=i.name,
-             species=target,
-             rebal_pr0=rebalance_pr0)
+             species=target)
     write_csv(fit.df, glue("{f.prefix}fit_ML_{f.suffix}.csv"))
     
     # OOS predictions
@@ -172,8 +161,7 @@ for(i in length(covariate_sets)) {
              xgb_split_mnpr=c(pred.xgb_01, pred.xgb_11))
     ) %>%
       mutate(covarSet=i.name,
-             species=target,
-             rebal_pr0=rebalance_pr0)
+             species=target)
     
     write_csv(pred.df, glue("{f.prefix}pred_ML_{f.suffix}.csv"))
     
@@ -246,8 +234,7 @@ for(i in length(covariate_sets)) {
                xgb_split_mnpr=c(pred.xgb_01, pred.xgb_11))
       ) %>%
         mutate(covarSet=i.name,
-               species=target,
-               rebal_pr0=rebalance_pr0)
+               species=target)
     }
     cv_pred %>% do.call('rbind', .) %>%
       write_csv(glue("{f.prefix}CV_ML_{f.suffix}.csv"))

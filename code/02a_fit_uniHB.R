@@ -15,7 +15,6 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 # Model details
-rebalance_pr0 <- c(NA, 0.4)[1]
 ctrl <- list(adapt_delta=0.95, max_treedepth=20)
 chains <- 4
 iter <- 2000
@@ -192,8 +191,7 @@ for(i in length(covariate_sets)) {
   for(sp in 1) {
     target <- species[sp]
     f.prefix <- glue("out{sep}full{sep}")
-    f.suffix <- glue("{i.name}_{target}",
-                     "{ifelse(is.na(rebalance_pr0),'',paste0('_rebal',rebalance_pr0*100))}")
+    f.suffix <- glue("{i.name}_{target}")
     
     target.tf <- thresh.df %>% filter(hab_parameter==target)
     
@@ -241,8 +239,7 @@ for(i in length(covariate_sets)) {
              NlnRAvg2=NA,
              lon_sc=LaplacesDemon::CenterScale(lon),
              lat_sc=LaplacesDemon::CenterScale(lat),
-             species=target, 
-             rebal_pr0=rebalance_pr0) %>%
+             species=target) %>%
       filter(!siteid %in% c(70, 74, 75, 80, 88))
     # TODO: I don't remember why these sites are excluded
     
@@ -260,16 +257,6 @@ for(i in length(covariate_sets)) {
     }
     
     write_csv(target.df, glue("{f.prefix}dataset_{i.name}_{target}.csv"))
-    
-    target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
-    if(!is.na(rebalance_pr0)) {
-      i_0 <- which(target.df$Nbloom==0)
-      i_1 <- which(target.df$Nbloom==1)
-      i_0_rb <- sample(i_0, floor(nrow(target.df)*rebalance_pr0), replace=T)
-      i_1_rb <- sample(i_1, ceiling(nrow(target.df)*(1-rebalance_pr0)), replace=T)
-      target.df <- target.df[c(i_0_rb, i_1_rb),] 
-      write_csv(target.df, glue("{f.prefix}dataset_{f.suffix}_HBuv.csv")) 
-    }
     
     train.df <- target.df %>% filter(year <= 2019)
     test.df <- target.df %>% filter(year > 2019)
@@ -337,8 +324,7 @@ for(i in length(covariate_sets)) {
              bernP_mnpr=c(colMeans(fit.bernP01), colMeans(fit.bernP11)))
     ) %>%
       mutate(covarSet=i.name,
-             species=target,
-             rebal_pr0=rebalance_pr0)
+             species=target)
     write_csv(fit.df, glue("{f.prefix}fit_HBuv_{f.suffix}.csv"))
     
     # OOS predictions
@@ -365,8 +351,7 @@ for(i in length(covariate_sets)) {
              bernP_mnpr=c(pred.bernP01, pred.bernP11))
     ) %>%
       mutate(covarSet=i.name,
-             species=target,
-             rebal_pr0=rebalance_pr0)
+             species=target)
     
     write_csv(pred.df, glue("{f.prefix}pred_HBuv_{f.suffix}.csv"))
     
@@ -444,8 +429,7 @@ for(i in length(covariate_sets)) {
                bernP_mnpr=c(pred.bernP01, pred.bernP11))
       ) %>%
         mutate(covarSet=i.name,
-               species=target,
-               rebal_pr0=rebalance_pr0)
+               species=target)
     }
     cv_pred %>% do.call('rbind', .) %>%
       write_csv(glue("{f.prefix}CV_HBuv_{f.suffix}.csv"))
