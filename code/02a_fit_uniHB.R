@@ -24,19 +24,7 @@ refresh <- 50
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
-if(.Platform$OS.type=="unix") {
-  sep <- "/"
-  westcoms.dir <- c("/media/archiver/common/sa01da-work/minch2/Archive/",
-                    "/media/archiver/common/sa01da-work/WeStCOMS2/Archive/")
-  mesh.f <- c("/home/sa04ts/FVCOM_meshes/WeStCOMS_mesh.gpkg",
-              "/home/sa04ts/FVCOM_meshes/WeStCOMS2_mesh.gpkg")
-} else {
-  sep <- "\\"
-  westcoms.dir <- c("D:\\hydroOut\\minch2\\Archive\\",
-                    "D:\\hydroOut\\WestCOMS2\\Archive\\")
-  mesh.f <- c("..\\..\\01_FVCOM\\data\\WeStCOMS_Mesh.gpkg",
-              "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
-}
+sep <- ifelse(.Platform$OS.type=="unix", "/", "\\")
 
 # tribble(~full, ~abbr, ~clean,
 #         "alexandrium_sp", "Alsp", "Alexandrium sp.",
@@ -252,7 +240,9 @@ for(i in length(covariate_sets)) {
              NlnRAvg1=NA,
              NlnRAvg2=NA,
              lon_sc=LaplacesDemon::CenterScale(lon),
-             lat_sc=LaplacesDemon::CenterScale(lat)) %>%
+             lat_sc=LaplacesDemon::CenterScale(lat),
+             species=target, 
+             rebal_pr0=rebalance_pr0) %>%
       filter(!siteid %in% c(70, 74, 75, 80, 88))
     # TODO: I don't remember why these sites are excluded
     
@@ -346,7 +336,9 @@ for(i in length(covariate_sets)) {
              bern_mnpr=c(colMeans(fit.bern01), colMeans(fit.bern11)),
              bernP_mnpr=c(colMeans(fit.bernP01), colMeans(fit.bernP11)))
     ) %>%
-      mutate(covarSet=i.name)
+      mutate(covarSet=i.name,
+             species=target,
+             rebal_pr0=rebalance_pr0)
     write_csv(fit.df, glue("{f.prefix}fit_HBuv_{f.suffix}.csv"))
     
     # OOS predictions
@@ -372,7 +364,9 @@ for(i in length(covariate_sets)) {
              bern_mnpr=c(pred.bern01, pred.bern11),
              bernP_mnpr=c(pred.bernP01, pred.bernP11))
     ) %>%
-      mutate(covarSet=i.name)
+      mutate(covarSet=i.name,
+             species=target,
+             rebal_pr0=rebalance_pr0)
     
     write_csv(pred.df, glue("{f.prefix}pred_HBuv_{f.suffix}.csv"))
     
@@ -449,7 +443,9 @@ for(i in length(covariate_sets)) {
                bern_mnpr=c(pred.bern01, pred.bern11),
                bernP_mnpr=c(pred.bernP01, pred.bernP11))
       ) %>%
-        mutate(covarSet=i.name)
+        mutate(covarSet=i.name,
+               species=target,
+               rebal_pr0=rebalance_pr0)
     }
     cv_pred %>% do.call('rbind', .) %>%
       write_csv(glue("{f.prefix}CV_HBuv_{f.suffix}.csv"))

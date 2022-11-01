@@ -24,19 +24,7 @@ refresh <- 20
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
-if(.Platform$OS.type=="unix") {
-  sep <- "/"
-  westcoms.dir <- c("/media/archiver/common/sa01da-work/minch2/Archive/",
-                    "/media/archiver/common/sa01da-work/WeStCOMS2/Archive/")
-  mesh.f <- c("/home/sa04ts/FVCOM_meshes/WeStCOMS_mesh.gpkg",
-              "/home/sa04ts/FVCOM_meshes/WeStCOMS2_mesh.gpkg")
-} else {
-  sep <- "\\"
-  westcoms.dir <- c("D:\\hydroOut\\minch2\\Archive\\",
-                    "D:\\hydroOut\\WestCOMS2\\Archive\\")
-  mesh.f <- c("..\\..\\01_FVCOM\\data\\WeStCOMS_Mesh.gpkg",
-              "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
-}
+sep <- ifelse(.Platform$OS.type=="unix", "/", "\\")
 
 sp.i <- read_csv("data/sp_i.csv")
 
@@ -243,7 +231,8 @@ walk(1:nrow(sp.i),
              MVordP_mnpr=calc_ord_mnpr(fits.ordP[[.x]], bloomThresh[[.x]]),
              MVbern_mnpr=colMeans(fits.bern[[.x]]),
              MVbernP_mnpr=colMeans(fits.bernP[[.x]]),
-             covarSet=i.name) %>%
+             covarSet=i.name,
+             rebal_pr0=rebalance_pr0) %>%
       write_csv(glue("{f.prefix}fit_HBmv_{sp.i$full[.x]}_all.csv"))) 
 
 

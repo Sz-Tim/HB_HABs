@@ -20,19 +20,7 @@ rebalance_pr0 <- c(NA, 0.4)[2]
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
-if(.Platform$OS.type=="unix") {
-  sep <- "/"
-  westcoms.dir <- c("/media/archiver/common/sa01da-work/minch2/Archive/",
-                    "/media/archiver/common/sa01da-work/WeStCOMS2/Archive/")
-  mesh.f <- c("/home/sa04ts/FVCOM_meshes/WeStCOMS_mesh.gpkg",
-              "/home/sa04ts/FVCOM_meshes/WeStCOMS2_mesh.gpkg")
-} else {
-  sep <- "\\"
-  westcoms.dir <- c("D:\\hydroOut\\minch2\\Archive\\",
-                    "D:\\hydroOut\\WestCOMS2\\Archive\\")
-  mesh.f <- c("..\\..\\01_FVCOM\\data\\WeStCOMS_Mesh.gpkg",
-              "..\\..\\01_FVCOM\\data\\WeStCOMS2_Mesh.gpkg")
-}
+sep <- ifelse(.Platform$OS.type=="unix", "/", "\\")
 
 sp.i <- read_csv("data/sp_i.csv")
 
@@ -43,10 +31,6 @@ sp.i <- read_csv("data/sp_i.csv")
 
 species <- sp.i$full
 
-# >0.85 cor(res,time) = temp, salinity
-# >0.85 cor(res) = short_wave, km, precip, wind, windDir
-# >0.85 cor(time) = water
-# waterDir is more variable across all 4
 covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
             "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
             "wind_L_wk", "windDir_L_wk",
@@ -95,9 +79,6 @@ for(i in length(covariate_sets)) {
     test.df <- target.df %>% filter(year > 2019)
     bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
     
-    # TODO: Tune each method....
-    # https://blog.alpha-analysis.com/search/label/R
-    
     # Full fit for predictions
     # Machine Learning: Random Forest, Support Vector Machine, XGBoost
     ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covars)
@@ -121,7 +102,7 @@ for(i in length(covariate_sets)) {
     saveRDS(rf.01, glue("{f.prefix}rf01_{f.suffix}.rds"))
     saveRDS(rf.11, glue("{f.prefix}rf11_{f.suffix}.rds"))
     
-    svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
+    #svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
     svm_rng <- list(cost=10^(-2:2), gamma=2^(-2:2))
     svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
     svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
@@ -153,7 +134,9 @@ for(i in length(covariate_sets)) {
              xgb_split_mnpr=c(predict(xg.01, as.matrix(train.ML01[,-1])),
                               predict(xg.11, as.matrix(train.ML11[,-1]))))
     ) %>%
-      mutate(covarSet=i.name)
+      mutate(covarSet=i.name,
+             species=target,
+             rebal_pr0=rebalance_pr0)
     write_csv(fit.df, glue("{f.prefix}fit_ML_{f.suffix}.csv"))
     
     # OOS predictions
@@ -188,7 +171,9 @@ for(i in length(covariate_sets)) {
              svm_split_mnpr=c(pred.svm_01, pred.svm_11),
              xgb_split_mnpr=c(pred.xgb_01, pred.xgb_11))
     ) %>%
-      mutate(covarSet=i.name)
+      mutate(covarSet=i.name,
+             species=target,
+             rebal_pr0=rebalance_pr0)
     
     write_csv(pred.df, glue("{f.prefix}pred_ML_{f.suffix}.csv"))
     
@@ -260,7 +245,9 @@ for(i in length(covariate_sets)) {
                svm_split_mnpr=c(pred.svm_01, pred.svm_11),
                xgb_split_mnpr=c(pred.xgb_01, pred.xgb_11))
       ) %>%
-        mutate(covarSet=i.name)
+        mutate(covarSet=i.name,
+               species=target,
+               rebal_pr0=rebalance_pr0)
     }
     cv_pred %>% do.call('rbind', .) %>%
       write_csv(glue("{f.prefix}CV_ML_{f.suffix}.csv"))
