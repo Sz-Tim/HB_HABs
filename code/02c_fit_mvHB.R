@@ -228,7 +228,7 @@ walk(1:nrow(sp.i),
              MVbern_mnpr=colMeans(fits.bern[[.x]]),
              MVbernP_mnpr=colMeans(fits.bernP[[.x]]),
              covarSet=i.name) %>%
-      write_csv(glue("{f.prefix}fit_HBmv_{sp.i$full[.x]}_all.csv"))) 
+      write_csv(glue("{f.prefix}fit_HBmv_all_{sp.i$full[.x]}.csv"))) 
 
 
 # OOS prediction
@@ -244,7 +244,7 @@ walk(1:nrow(sp.i),
               MVbern_mnpr=colMeans(preds.bern[[.x]]),
               MVbernP_mnpr=colMeans(preds.bernP[[.x]]),
               covarSet=i.name) %>%
-       write_csv(glue("{f.prefix}pred_HBmv_{sp.i$full[.x]}_all.csv"))) 
+       write_csv(glue("{f.prefix}pred_HBmv_all_{sp.i$full[.x]}.csv"))) 
 
 
 
@@ -319,7 +319,7 @@ saveRDS(cv_pred, glue("{f.prefix}CV_PRED_HBmv_list.rds"))
 for(i in 1:nrow(sp.i)) {
   map(cv_pred, ~.x[[i]]) %>% 
     do.call('rbind', .) %>%
-    write_csv(glue("{f.prefix}CV_HBmv_{sp.i$full[i]}_all.csv"))
+    write_csv(glue("{f.prefix}CV_HBmv_all_{sp.i$full[i]}.csv"))
 }
   
   
