@@ -20,6 +20,7 @@ chains <- 4
 iter <- 2000
 warmup <- iter/2
 refresh <- 20
+prior_strength <- c(1,2,3)[1]
 
 # minch2:    2013-06-20 to 2019-07-02
 # WeStCOMS2: 2019-04-01 to 2022-01-26
@@ -61,7 +62,7 @@ covar_int.all <- c(
            "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
            "fetch", #"influxwk", 
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
-           paste0("Nbloom1", species), paste0("Nbloom2", species),
+           # paste0("Nbloom1", species), paste0("Nbloom2", species),
            paste0("NlnWt1", species), paste0("NlnWt2", species),
            paste0("NlnRAvg2", species), paste0("NlnRAvg2", species)), 
          ":ydayCos:ydaySin"),
@@ -74,7 +75,7 @@ covar_s.all <- c(
   "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
   "fetch",# "influxwk", 
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
-  paste0("Nbloom1", species), paste0("Nbloom2", species),
+  # paste0("Nbloom1", species), paste0("Nbloom2", species),
   paste0("NlnWt1", species), paste0("NlnWt2", species),
   paste0("NlnRAvg1", species), paste0("NlnRAvg2", species)
 )
@@ -102,8 +103,6 @@ covar_int <- grep(i.covs, covar_int.all, value=T)
 covar_s <- grep(i.covs, covar_s.all, value=T)
 covar_date <- NULL
 
-f.prefix <- glue("out{sep}full{sep}")
-f.suffix <- glue("{i.name}")
 
 # Smoothers
 s_b <- glue("b{covar_s}") 
@@ -116,16 +115,22 @@ mv_i <- expand_grid(sp=species,
          nl_b=glue("b{covar}"),
          nl_p=glue("p{covar}"))
 
+# Prior strengths
+pri.var <- switch(prior_strength,
+                  "1"=list(hs1=1, hs2=0.4, b=0.5, de=0.5, i="1-loose"),
+                  "2"=list(hs1=3, hs2=0.2, b=0.2, de=0.1, i="2-medium"),
+                  "3"=list(hs1=5, hs2=0.1, b=0.05, de=0.02, i="3-tight"))
+
 # Interaction priors
 priors.ord <- map(
   unique(mv_i$ord),
-  ~c(prior_string("horseshoe(3,par_ratio=0.2)", class="b", resp=.x),
+  ~c(prior_string(glue("horseshoe({pri.var$hs1}, par_ratio={pri.var$hs2})"), class="b", resp=.x),
      prior_string("normal(0,1)", class="Intercept", resp=.x),
      prior_string("normal(0,0.5)", class="sd", lb=0, resp=.x))) %>% 
   do.call('c',. )
 priors.bern <- map(
   unique(mv_i$bern),
-  ~c(prior_string("horseshoe(3,par_ratio=0.2)", class="b", resp=.x),
+  ~c(prior_string(glue("horseshoe({pri.var$hs1}, par_ratio={pri.var$hs2})"), class="b", resp=.x),
      prior_string("normal(0,1)", class="Intercept", resp=.x),
      prior_string("normal(0,0.5)", class="sd", lb=0, resp=.x))) %>% 
   do.call('c',. )
@@ -140,34 +145,37 @@ priors.ordP <- c(
   map(unique(mv_i$ord), 
       ~c(prior_string("normal(0,1)", class="b", nlpar="bIntercept", resp=.x),
          prior_string("normal(0,.5)", class="sd", nlpar="bIntercept", lb=0, resp=.x),
-         prior_string("double_exponential(0,0.1)", class="sds", nlpar="bIntercept", lb=0, resp=.x))) %>%
+         prior_string(glue("double_exponential(0,{pri.var$de})"), class="sds", nlpar="bIntercept", lb=0, resp=.x))) %>%
     do.call('c', .),
   map(1:nrow(mv_i),
-      ~c(prior_string("beta(0.2,1)", nlpar=mv_i$nl_p[.x], resp=mv_i$ord[.x], lb=0, ub=1),
+      ~c(prior_string(glue("beta({pri.var$b},1)"), nlpar=mv_i$nl_p[.x], resp=mv_i$ord[.x], lb=0, ub=1),
          prior_string("normal(0,1)", class="b", nlpar=mv_i$nl_b[.x], resp=mv_i$ord[.x]),
          prior_string("normal(0,.5)", class="sd", nlpar=mv_i$nl_p[.x], resp=mv_i$ord[.x], lb=0),
          prior_string("normal(0,.5)", class="sd", nlpar=mv_i$nl_b[.x], resp=mv_i$ord[.x], lb=0),
-         prior_string("double_exponential(0,0.1)", class="sds", nlpar=mv_i$nl_b[.x], resp=mv_i$ord[.x], lb=0))) %>%
+         prior_string(glue("double_exponential(0,{pri.var$de})"), class="sds", nlpar=mv_i$nl_b[.x], resp=mv_i$ord[.x], lb=0))) %>%
     do.call('c', .)
 )
 priors.bernP <- c(
   map(unique(mv_i$bern),
       ~c(prior_string("normal(0,1)", class="b", nlpar="bIntercept", resp=.x),
          prior_string("normal(0,.5)", class="sd", nlpar="bIntercept", lb=0, resp=.x),
-         prior_string("double_exponential(0,0.1)", class="sds", nlpar="bIntercept", lb=0, resp=.x))) %>%
+         prior_string(glue("double_exponential(0,{pri.var$de})"), class="sds", nlpar="bIntercept", lb=0, resp=.x))) %>%
     do.call('c', .),
   map(1:nrow(mv_i),
-      ~c(prior_string("beta(0.2,1)", nlpar=mv_i$nl_p[.x], resp=mv_i$bern[.x], lb=0, ub=1),
+      ~c(prior_string(glue("beta({pri.var$b},1)"), nlpar=mv_i$nl_p[.x], resp=mv_i$bern[.x], lb=0, ub=1),
          prior_string("normal(0,1)", class="b", nlpar=mv_i$nl_b[.x], resp=mv_i$bern[.x]),
          prior_string("normal(0,.5)", class="sd", nlpar=mv_i$nl_p[.x], resp=mv_i$bern[.x], lb=0),
          prior_string("normal(0,.5)", class="sd", nlpar=mv_i$nl_b[.x], resp=mv_i$bern[.x], lb=0),
-         prior_string("double_exponential(0,0.1)", class="sds", nlpar=mv_i$nl_b[.x], resp=mv_i$bern[.x], lb=0))) %>%
+         prior_string(glue("double_exponential(0,{pri.var$de})"), class="sds", nlpar=mv_i$nl_b[.x], resp=mv_i$bern[.x], lb=0))) %>%
     do.call('c', .)
 )
 
 
 
 # initial fit -------------------------------------------------------------
+
+f.prefix <- glue("out{sep}{pri.var$i}{sep}")
+f.suffix <- glue("{i.name}")
 
 train.df <- data.df %>% filter(year <= 2019)
 test.df <- data.df %>% filter(year > 2019)
