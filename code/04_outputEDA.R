@@ -12,7 +12,7 @@ library(tidyverse)
 library(glue)
 library(lubridate)
 library(brms)
-library(gganimate)
+# library(gganimate)
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
@@ -92,7 +92,7 @@ p <- outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_McFadden.png", p, width=10, height=5, units="in")
+ggsave(glue("figs/R2_McFadden_{prior_type}.png"), p, width=10, height=5, units="in")
 
 p <- outMn.df %>%
   mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom")) %>%
@@ -112,7 +112,7 @@ p <- outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_McFadden_Bloom.png", p, width=10, height=5, units="in")
+ggsave(glue("figs/R2_McFadden_Bloom_{prior_type}.png"), p, width=10, height=5, units="in")
 
 p <- outMn.df %>%
   group_by(species, dataSubset, model, modType) %>%
@@ -131,7 +131,7 @@ p <- outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_Nagelkerke.png", p, width=10, height=5, units="in")
+ggsave(glue("figs/R2_Nagelkerke_{prior_type}.png"), p, width=10, height=5, units="in")
 
 p <- outMn.df %>%
   mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom")) %>%
@@ -152,7 +152,7 @@ p <- outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_Nagelkerke_Bloom.png", p, width=10, height=5, units="in")
+ggsave(glue("figs/R2_Nagelkerke_Bloom_{prior_type}.png"), p, width=10, height=5, units="in")
 
 
 
@@ -177,20 +177,20 @@ thresh.TSS <- map_dfr(thresh,
                            TNR=TN/(FP+TN),
                            TSS=TPR+TNR-1) %>%
                     filter(model!="Grand mean"))
-anim <- ggplot(thresh.TSS, aes(model, TSS, shape=dataSubset, colour=modType)) + 
-  geom_point() + 
-  facet_grid(.~species) +
-  scale_y_continuous(limits=c(-0.1, 1), breaks=c(0, 0.25, 0.5, 0.75, 1)) +
-  scale_colour_manual("Model type", values=modType_cols) +
-  scale_shape_manual(values=c(1,19)) +
-  transition_states(thresh, transition_length=1, state_length=0) +
-  ease_aes('cubic-in-out') +
-  labs(x="Model", y="TSS", title="p(bloom) threshold:{closest_state}") +
-  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
-        panel.grid.minor.y=element_blank(),
-        legend.position="bottom")
-anim_save("figs/TSS_pBloomThresh.gif", anim, nframes=3*length(thresh), fps=32,
-          width=10, height=4.5, res=300, units="in")
+# anim <- ggplot(thresh.TSS, aes(model, TSS, shape=dataSubset, colour=modType)) + 
+#   geom_point() + 
+#   facet_grid(.~species) +
+#   scale_y_continuous(limits=c(-0.1, 1), breaks=c(0, 0.25, 0.5, 0.75, 1)) +
+#   scale_colour_manual("Model type", values=modType_cols) +
+#   scale_shape_manual(values=c(1,19)) +
+#   transition_states(thresh, transition_length=1, state_length=0) +
+#   ease_aes('cubic-in-out') +
+#   labs(x="Model", y="TSS", title="p(bloom) threshold:{closest_state}") +
+#   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
+#         panel.grid.minor.y=element_blank(),
+#         legend.position="bottom")
+# anim_save("figs/TSS_pBloomThresh.gif", anim, nframes=3*length(thresh), fps=32,
+#           width=10, height=4.5, res=300, units="in")
 
 
 p <- thresh.TSS %>%
@@ -207,7 +207,7 @@ p <- thresh.TSS %>%
   labs(x="p(bloom) threshold", y="TSS", title="Out-of-sample TSS") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/TSS_pBloomThresh_range.png", p, width=10, height=4.5, dpi=300)
+ggsave(glue("figs/TSS_pBloomThresh_range_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
 
 p <- thresh.TSS %>%
   filter(dataSubset=="oos") %>%
@@ -222,7 +222,7 @@ p <- thresh.TSS %>%
   labs(x="TSS", y="", title="Out-of-sample TSS at optimal p(bloom)") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/TSS_pBloomThresh_opt.png", p, width=10, height=4.5, dpi=300)
+ggsave(glue("figs/TSS_pBloomThresh_opt_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
 
 
 
@@ -261,7 +261,7 @@ p <- thresh.HSS %>%
   labs(x="p(bloom) threshold", y="TSS", title="Out-of-sample HSS") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/HSS_pBloomThresh_range.png", p, width=10, height=4.5, dpi=300)
+ggsave(glue("figs/HSS_pBloomThresh_range_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
 
 p <- thresh.HSS %>%
   filter(dataSubset=="oos") %>%
@@ -276,7 +276,7 @@ p <- thresh.HSS %>%
   labs(x="HSS", y="", title="Out-of-sample HSS at optimal p(bloom)") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/HSS_pBloomThresh_opt.png", p, width=10, height=4.5, dpi=300)
+ggsave(glue("figs/HSS_pBloomThresh_opt_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
 
 
 
