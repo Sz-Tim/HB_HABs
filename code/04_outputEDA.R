@@ -17,7 +17,8 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-out.dir <- "out/full/"
+out.dir <- "out/1-loose/"
+prior_type <- "1-loose"
 
 sp.i <- read_csv("data/sp_i.csv")
 
@@ -75,7 +76,7 @@ outMn.df <- read_csv(glue("{out.dir}/full_mean_out.csv")) %>%
 
 # Pseudo-R2 ---------------------------------------------------------------
 
-outMn.df %>%
+p <- outMn.df %>%
   group_by(species, dataSubset, model, modType) %>%
   summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
   group_by(species, dataSubset) %>%
@@ -91,9 +92,9 @@ outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_McFadden.jpg", width=10, height=5, units="in")
+ggsave("figs/R2_McFadden.png", p, width=10, height=5, units="in")
 
-outMn.df %>%
+p <- outMn.df %>%
   mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom")) %>%
   group_by(species, dataSubset, model, modType, Bloom) %>%
   summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
@@ -111,9 +112,9 @@ outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_McFadden_Bloom.jpg", width=10, height=5, units="in")
+ggsave("figs/R2_McFadden_Bloom.png", p, width=10, height=5, units="in")
 
-outMn.df %>%
+p <- outMn.df %>%
   group_by(species, dataSubset, model, modType) %>%
   summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T)),
             N=n()) %>%
@@ -130,9 +131,9 @@ outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_Nagelkerke.jpg", width=10, height=5, units="in")
+ggsave("figs/R2_Nagelkerke.png", p, width=10, height=5, units="in")
 
-outMn.df %>%
+p <- outMn.df %>%
   mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom")) %>%
   group_by(species, dataSubset, model, modType, Bloom) %>%
   summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T)),
@@ -151,7 +152,7 @@ outMn.df %>%
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/R2_Nagelkerke_Bloom.jpg", width=10, height=5, units="in")
+ggsave("figs/R2_Nagelkerke_Bloom.png", p, width=10, height=5, units="in")
 
 
 
@@ -192,7 +193,7 @@ anim_save("figs/TSS_pBloomThresh.gif", anim, nframes=3*length(thresh), fps=32,
           width=10, height=4.5, res=300, units="in")
 
 
-thresh.TSS %>%
+p <- thresh.TSS %>%
   filter(dataSubset=="oos") %>%
   filter(model %in% c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")) %>%
   ggplot(aes(thresh, TSS, group=model, colour=model)) +
@@ -200,15 +201,15 @@ thresh.TSS %>%
                group_by(species) %>% summarise(grandMean=mean(pred)),
              aes(xintercept=grandMean), linetype=2) +
   geom_line() +
-  scale_colour_manual(values=mod_cols[c("fourWk", "bernP", "ordP", "rf", "svm", "xgb", "avg")]) +
+  scale_colour_manual(values=mod_cols[c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")]) +
   facet_grid(.~species) +
   scale_y_continuous(limits=c(-0.1, 1), breaks=c(0, 0.5, 1)) +
   labs(x="p(bloom) threshold", y="TSS", title="Out-of-sample TSS") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/TSS_pBloomThresh_range.png", width=10, height=4.5, dpi=300)
+ggsave("figs/TSS_pBloomThresh_range.png", p, width=10, height=4.5, dpi=300)
 
-thresh.TSS %>%
+p <- thresh.TSS %>%
   filter(dataSubset=="oos") %>%
   group_by(species, model) %>%
   arrange(desc(TSS)) %>%
@@ -221,7 +222,7 @@ thresh.TSS %>%
   labs(x="TSS", y="", title="Out-of-sample TSS at optimal p(bloom)") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/TSS_pBloomThresh_opt.png", width=10, height=4.5, dpi=300)
+ggsave("figs/TSS_pBloomThresh_opt.png", p, width=10, height=4.5, dpi=300)
 
 
 
@@ -246,23 +247,23 @@ thresh.HSS <- map_dfr(thresh,
                         mutate(expCorrRand=1/N * ((TP+FN)*(TP+FP) + (TN+FN)*(TN+FP)),
                                HSS=((TP+TN)-expCorrRand)/(N-expCorrRand)) %>%
                         filter(model!="Grand mean"))
-thresh.HSS %>%
+p <- thresh.HSS %>%
   filter(dataSubset=="oos") %>%
-  filter(model %in% c("fourWk", "bernP", "ordP", "rf", "svm", "xgb", "avg")) %>%
+  filter(model %in% c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")) %>%
   ggplot(aes(thresh, HSS, group=model, colour=model)) +
   geom_vline(data=outMn.df %>% filter(model=="grand") %>%
                group_by(species) %>% summarise(grandMean=mean(pred)),
              aes(xintercept=grandMean), linetype=2) +
   geom_line() +
-  scale_colour_manual(values=mod_cols[c("fourWk", "bernP", "ordP", "rf", "svm", "xgb", "avg")]) +
+  scale_colour_manual(values=mod_cols[c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")]) +
   facet_grid(.~species) +
   scale_y_continuous(limits=c(-0.1, 1), breaks=c(0, 0.5, 1)) +
   labs(x="p(bloom) threshold", y="TSS", title="Out-of-sample HSS") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/HSS_pBloomThresh_range.png", width=10, height=4.5, dpi=300)
+ggsave("figs/HSS_pBloomThresh_range.png", p, width=10, height=4.5, dpi=300)
 
-thresh.HSS %>%
+p <- thresh.HSS %>%
   filter(dataSubset=="oos") %>%
   group_by(species, model) %>%
   arrange(desc(HSS)) %>%
@@ -275,7 +276,7 @@ thresh.HSS %>%
   labs(x="HSS", y="", title="Out-of-sample HSS at optimal p(bloom)") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
-ggsave("figs/HSS_pBloomThresh_opt.png", width=10, height=4.5, dpi=300)
+ggsave("figs/HSS_pBloomThresh_opt.png", p, width=10, height=4.5, dpi=300)
 
 
 
@@ -345,6 +346,7 @@ auc.df <- map_dfr(auc.f, ~read_csv(.x, show_col_types=F) %>%
                            t_m1=str_split_fixed(.x, "_", 4)[,3])) %>%
   mutate(type=if_else(grepl("fit", type), "fit", "forecast")) %>%
   mutate(modType=case_when(grepl("fourWk|grand", model) ~ "Null",
+                           grepl("glm", model) ~ "GLM",
                            grepl("rf", model) ~ "ML: RF",
                            grepl("^svm", model) ~ "ML: SVM",
                            grepl("^xgb", model) ~ "ML: XGB",
@@ -352,7 +354,7 @@ auc.df <- map_dfr(auc.f, ~read_csv(.x, show_col_types=F) %>%
                            grepl("bern", model) ~ "Bayes: Logistic",
                            grepl("avg", model) ~ "Ensemble"),
          model=factor(model, levels=mod.i$mod_col, labels=mod.i$mod_short))
-ggplot(auc.df, aes(model, AUC, colour=modType, shape=type)) +
+p <- ggplot(auc.df, aes(model, AUC, colour=modType, shape=type)) +
   geom_point() +
   facet_grid(.~species) + 
   scale_colour_manual(values=modType_cols) + 
@@ -363,7 +365,7 @@ ggplot(auc.df, aes(model, AUC, colour=modType, shape=type)) +
         legend.position="bottom",
         legend.title=element_blank(),
         panel.grid.minor.y=element_blank())
-ggsave("figs/AUC.jpg", width=7.5, height=4.5)
+ggsave("figs/AUC.png", p, width=7.5, height=4.5)
 
 
 
@@ -374,22 +376,24 @@ sams.cols <- c("alexandrium_sp"="#2A5883",
                "karenia_mikimotoi"="#A9DAE0",
                "prorocentrum_lima"="#E77334",
                "pseudo_nitzschia_sp"="#D21E4C")
-
-
-# * ordP ------------------------------------------------------------------
-
-out.p <- dir("out/full", "ordP_all_", full.names=T) %>%
-  map(readRDS) %>% setNames(sp.i$full)
+site_sample <- sample(unique(outMn.df$siteid), 20)
 p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk', 
                'tempStrat20mLwk', 'tempStrat20mRwk', 
                'windVel', 'waterVelL', 'waterVelR', 
                'windLwk', 'waterLwk', 'waterRwk', 
                'fetch', 
                'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
+               'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
+
+
+
+# * ordP ------------------------------------------------------------------
+
+out.p <- dir(out.dir, "ordP_all_", full.names=T) %>%
+  map(readRDS) %>% setNames(sp.i$full)
 
 smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                    siteid=unique(outMn.df$siteid)) %>%
+                                    siteid=site_sample) %>%
                           mutate(ydayCos=cos(yday*2*pi/365),
                                  ydaySin=sin(yday*2*pi/365),
                                  ydaySC=ydayCos*ydaySin,
@@ -420,32 +424,25 @@ pred.ordP <- do.call(rbind, pred.ls) %>%
   rename_all(~str_remove(.x, "wk")) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.ordP, "out/smooths_ordP.rds")
-ggplot(pred.ordP, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
+saveRDS(pred.ordP, glue("out/effects_ordP_{prior_type}.rds"))
+p <- ggplot(pred.ordP, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
   geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
   scale_colour_brewer(type="qual", palette="Dark2") +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave("figs/smooths_ordP.jpg", width=9, height=9)
+ggsave(glue("figs/effects_ordP_{prior_type}.png"), p, width=9, height=9)
 
 
 
 # * bernP01 ---------------------------------------------------------------
 
-out.p <- dir("out/full", "bernP01_all_", full.names=T) %>%
+out.p <- dir(out.dir, "bernP01_all_", full.names=T) %>%
   map(readRDS) %>% setNames(sp.i$full)
-p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk', 
-               'tempStrat20mLwk', 'tempStrat20mRwk', 
-               'windVel', 'waterVelL', 'waterVelR', 
-               'windLwk', 'waterLwk', 'waterRwk', 
-               'fetch', 
-               'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 
 smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                    siteid=unique(outMn.df$siteid)) %>%
+                                    siteid=site_sample) %>%
                           mutate(ydayCos=cos(yday*2*pi/365),
                                  ydaySin=sin(yday*2*pi/365),
                                  ydaySC=ydayCos*ydaySin,
@@ -476,32 +473,25 @@ pred.bernP01 <- do.call(rbind, pred.ls) %>%
   rename_all(~str_remove(.x, "wk")) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.bernP01, "out/smooths_bernP01.rds")
-ggplot(pred.bernP01, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
+saveRDS(pred.bernP01, glue("out/effects_bernP01_{prior_type}.rds"))
+p <- ggplot(pred.bernP01, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
   geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
   scale_colour_brewer(type="qual", palette="Dark2") +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave("figs/smooths_bernP01.jpg", width=9, height=9)
+ggsave(glue("figs/effects_bernP01_{prior_type}.png"), p, width=9, height=9)
 
 
 
 # * bernP11 ---------------------------------------------------------------
 
-out.p <- dir("out/full", "bernP11_all_", full.names=T) %>%
+out.p <- dir(out.dir, "bernP11_all_", full.names=T) %>%
   map(readRDS) %>% setNames(sp.i$full)
-p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk', 
-               'tempStrat20mLwk', 'tempStrat20mRwk', 
-               'windVel', 'waterVelL', 'waterVelR', 
-               'windLwk', 'waterLwk', 'waterRwk', 
-               'fetch', 
-               'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 
 smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                    siteid=unique(outMn.df$siteid)) %>%
+                                    siteid=site_sample) %>%
                           mutate(ydayCos=cos(yday*2*pi/365),
                                  ydaySin=sin(yday*2*pi/365),
                                  ydaySC=ydayCos*ydaySin,
@@ -532,15 +522,15 @@ pred.bernP11 <- do.call(rbind, pred.ls) %>%
   rename_all(~str_remove(.x, "wk")) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.bernP11, "out/smooths_bernP11.rds")
-ggplot(pred.bernP11, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
+saveRDS(pred.bernP11, glue("out/effects_bernP11_{prior_type}.rds"))
+p <- ggplot(pred.bernP11, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
   geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
   scale_colour_brewer(type="qual", palette="Dark2") +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave("figs/smooths_bernP11.jpg", width=9, height=9)
+ggsave(glue("figs/effects_bernP11_{prior_type}.png"), p, width=9, height=9)
 
 
 
@@ -549,22 +539,15 @@ ggsave("figs/smooths_bernP11.jpg", width=9, height=9)
 
 # * ord ---------------------------------------------------------------
 
-out.p <- dir("out/full", "ord_all_", full.names=T) %>%
+out.p <- dir(out.dir, "ord_all_", full.names=T) %>%
   map(readRDS) %>% setNames(sp.i$full)
-p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk', 
-               'tempStrat20mLwk', 'tempStrat20mRwk', 
-               'windVel', 'waterVelL', 'waterVelR', 
-               'windLwk', 'waterLwk', 'waterRwk', 
-               'fetch', 
-               'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 
 pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
 for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.effects,
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                                 siteid=unique(outMn.df$siteid),
-                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
+                                                 siteid=site_sample,
+                                                 x_var_temp=seq(-2, 2, 1)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
@@ -584,7 +567,7 @@ pred.ord <- do.call(rbind, pred.ls) %>%
   rename_all(~str_remove(.x, "wk")) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.ord, "out/smooths_ord.rds")
+saveRDS(pred.ord, glue("out/effects_ord_{prior_type}.rds"))
 p <- ggplot(pred.ord, aes(date, pred, colour=x_var, group=paste(x_var, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
   geom_line(alpha=0.25) + facet_grid(species~var) +
@@ -592,28 +575,21 @@ p <- ggplot(pred.ord, aes(date, pred, colour=x_var, group=paste(x_var, siteid)))
   scale_colour_viridis_c() +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave("figs/smooths_ord.jpg", p, width=25, height=9)
+ggsave(glue("figs/effects_ord_{prior_type}.png"), p, width=28, height=8)
 
 
 
 # * bern11 ---------------------------------------------------------------
 
-out.p <- dir("out/full", "bern11_all_", full.names=T) %>%
+out.p <- dir(out.dir, "bern11_all_", full.names=T) %>%
   map(readRDS) %>% setNames(sp.i$full)
-p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk', 
-               'tempStrat20mLwk', 'tempStrat20mRwk', 
-               'windVel', 'waterVelL', 'waterVelR', 
-               'windLwk', 'waterLwk', 'waterRwk', 
-               'fetch', 
-               'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 
 pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
 for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.effects,
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                                 siteid=unique(outMn.df$siteid),
-                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
+                                                 siteid=site_sample,
+                                                 x_var_temp=seq(-2, 2, 1)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
@@ -632,36 +608,29 @@ pred.bern11 <- do.call(rbind, pred.ls) %>%
   rename_all(~str_remove(.x, "wk")) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.bern11, "out/smooths_bern11.rds")
-ggplot(pred.bern11, aes(date, pred, colour=species, group=paste(species, siteid))) + 
+saveRDS(pred.bern11, glue("out/effects_bern11_{prior_type}.rds"))
+p <- ggplot(pred.bern11, aes(date, pred, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
   geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
   scale_colour_brewer(type="qual", palette="Dark2") +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave("figs/smooths_bern11.jpg", width=9, height=9)
+ggsave(glue("figs/effects_bern11_{prior_type}.png"), p, width=28, height=7)
 
 
 
 # * bern01 ---------------------------------------------------------------
 
-out.p <- dir("out/full", "bern01_all_", full.names=T) %>%
+out.p <- dir(out.dir, "bern01_all_", full.names=T) %>%
   map(readRDS) %>% setNames(sp.i$full)
-p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk', 
-               'tempStrat20mLwk', 'tempStrat20mRwk', 
-               'windVel', 'waterVelL', 'waterVelR', 
-               'windLwk', 'waterLwk', 'waterRwk', 
-               'fetch', 
-               'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
-               'Nbloom1', 'Nbloom2', 'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 
 pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
 for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.effects,
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                                 siteid=unique(outMn.df$siteid),
-                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
+                                                 siteid=site_sample,
+                                                 x_var_temp=seq(-2, 2, 1)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
@@ -680,12 +649,12 @@ pred.bern01 <- do.call(rbind, pred.ls) %>%
   rename_all(~str_remove(.x, "wk")) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.bern01, "out/smooths_bern01.rds")
-ggplot(pred.bern01, aes(date, pred, colour=species, group=paste(species, siteid))) + 
+saveRDS(pred.bern01, glue("out/effects_bern01_{prior_type}.rds"))
+p <- ggplot(pred.bern01, aes(date, pred, colour=species, group=paste(species, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
   geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
   scale_colour_brewer(type="qual", palette="Dark2") +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave("figs/smooths_bern01.jpg", width=9, height=9)
+ggsave(glue("figs/effects_bern01_{prior_type}.png"), p, width=28, height=7)
