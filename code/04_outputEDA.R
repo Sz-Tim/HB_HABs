@@ -384,6 +384,7 @@ p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk',
                'fetch', 
                'attnwk', 'chlwk', 'dinowk', 'o2wk', 'phwk', 'po4wk', 
                'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
+if(prior_type=="full") p.effects <- c(p.effects, 'Nbloom1', "Nbloom2")
 
 
 
