@@ -300,7 +300,7 @@ for(j in c("fit", "oos")) {
   # species <- c("alexandrium_sp", "karenia_mikimotoi", "prorocentrum_lima")
   for(i in 1:5) {
     par(mfrow=c(1,1))
-    png(glue("figs/performance/ROC_{j}_xx_{sp.i$full[i]}.png"), width=5, height=5, res=300, units="in")
+    png(glue("figs/performance/ROC_{j}_{sp.i$full[i]}_{prior_type}.png"), width=5, height=5, res=300, units="in")
     plot(NA, NA, xlim=c(0, 1), ylim=c(0, 1),
          xlab="1 - Specificity", ylab="Sensitivity", axes=F, main=sp.i$full[i])
     axis(side=1, at=c(0, 0.5, 1))
@@ -327,7 +327,7 @@ for(j in c("fit", "oos")) {
                              grepl("ord", model) ~ "Bayes: Ordinal",
                              grepl("bern", model) ~ "Bayes: Logistic",
                              grepl("avg", model) ~ "Ensemble"))
-  write_csv(auc.df, glue("figs/performance/auc_{j}_xx_all.csv"))
+  write_csv(auc.df, glue("figs/performance/auc_{j}_{prior_type}_all.csv"))
 }
 
 
@@ -342,7 +342,7 @@ for(j in c("fit", "oos")) {
 
 auc.f <- dir(glue("figs/performance/"), "auc_.*csv", full.names=T)
 auc.df <- map_dfr(auc.f, ~read_csv(.x, show_col_types=F) %>%
-                    mutate(type=str_split_fixed(.x, "_", 3)[,2],
+                    mutate(type=str_split_fixed(.x, "_", 4)[,2],
                            t_m1=str_split_fixed(.x, "_", 4)[,3])) %>%
   mutate(type=if_else(grepl("fit", type), "fit", "forecast")) %>%
   mutate(modType=case_when(grepl("fourWk|grand", model) ~ "Null",
