@@ -17,8 +17,8 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-out.dir <- "out/1-loose/"
-prior_type <- "1-loose"
+prior_type <- "full"
+out.dir <- glue("out/{prior_type}/")
 
 sp.i <- read_csv("data/sp_i.csv")
 
@@ -365,7 +365,7 @@ p <- ggplot(auc.df, aes(model, AUC, colour=modType, shape=type)) +
         legend.position="bottom",
         legend.title=element_blank(),
         panel.grid.minor.y=element_blank())
-ggsave("figs/AUC.png", p, width=7.5, height=4.5)
+ggsave(glue("figs/AUC_{prior_type}.png"), p, width=7.5, height=4.5)
 
 
 
