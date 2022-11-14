@@ -17,7 +17,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-prior_type <- "full"
+prior_type <- "2-medium"
 out.dir <- glue("out/{prior_type}/")
 
 sp.i <- read_csv("data/sp_i.csv")
@@ -610,14 +610,14 @@ pred.bern11 <- do.call(rbind, pred.ls) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
 saveRDS(pred.bern11, glue("out/effects_bern11_{prior_type}.rds"))
-p <- ggplot(pred.bern11, aes(date, pred, colour=species, group=paste(species, siteid))) + 
+p <- ggplot(pred.bern11, aes(date, pred, colour=x_var, group=paste(x_var, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
-  scale_colour_brewer(type="qual", palette="Dark2") +
+  geom_line(alpha=0.25) + facet_grid(species~var) +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
+  scale_colour_viridis_c() +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave(glue("figs/effects_bern11_{prior_type}.png"), p, width=28, height=7)
+ggsave(glue("figs/effects_bern11_{prior_type}.png"), p, width=28, height=8)
 
 
 
@@ -651,11 +651,11 @@ pred.bern01 <- do.call(rbind, pred.ls) %>%
   rename_all(~str_replace(.x, "L", "_L")) %>%
   rename_all(~str_replace(.x, "R", "_R"))
 saveRDS(pred.bern01, glue("out/effects_bern01_{prior_type}.rds"))
-p <- ggplot(pred.bern01, aes(date, pred, colour=species, group=paste(species, siteid))) + 
+p <- ggplot(pred.bern01, aes(date, pred, colour=x_var, group=paste(x_var, siteid))) + 
   geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
-  scale_colour_brewer(type="qual", palette="Dark2") +
+  geom_line(alpha=0.25) + facet_grid(species~var) +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
+  scale_colour_viridis_c() +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave(glue("figs/effects_bern01_{prior_type}.png"), p, width=28, height=7)
+ggsave(glue("figs/effects_bern01_{prior_type}.png"), p, width=28, height=8)
