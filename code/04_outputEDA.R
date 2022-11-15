@@ -95,26 +95,6 @@ p <- outMn.df %>%
 ggsave(glue("figs/R2_McFadden_{prior_type}.png"), p, width=10, height=5, units="in")
 
 p <- outMn.df %>%
-  mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom")) %>%
-  group_by(species, dataSubset, model, modType, Bloom) %>%
-  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
-  group_by(species, dataSubset, Bloom) %>%
-  arrange(species, model) %>%
-  mutate(R2=1 - LL/first(LL)) %>%
-  ggplot(aes(model, R2, shape=Bloom, colour=modType, group=model)) +
-  geom_hline(yintercept=0, colour="grey30", size=0.25) +
-  geom_point() + geom_rug(sides="l") +
-  facet_grid(dataSubset~species) + 
-  scale_y_continuous(limits=c(0, 0.6), breaks=c(0, 0.2, 0.4, 0.6)) +
-  scale_colour_manual("Model type", values=modType_cols) +
-  scale_shape_manual(values=c(19,1)) +
-  labs(x="Model", y=expression("McFadden's pseudo-R"^2)) +
-  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
-        panel.grid.minor.y=element_blank(),
-        legend.position="bottom")
-ggsave(glue("figs/R2_McFadden_Bloom_{prior_type}.png"), p, width=10, height=5, units="in")
-
-p <- outMn.df %>%
   group_by(species, dataSubset, model, modType) %>%
   summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T)),
             N=n()) %>%
@@ -132,27 +112,6 @@ p <- outMn.df %>%
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
 ggsave(glue("figs/R2_Nagelkerke_{prior_type}.png"), p, width=10, height=5, units="in")
-
-p <- outMn.df %>%
-  mutate(Bloom=if_else(Nbloom==0, "to No Bloom", "to Bloom")) %>%
-  group_by(species, dataSubset, model, modType, Bloom) %>%
-  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T)),
-            N=n()) %>%
-  group_by(species, dataSubset, Bloom) %>%
-  arrange(species, model) %>%
-  mutate(R2=(1 - exp((LL - first(LL))/N))/(1 - exp(-first(LL)/N))) %>%
-  ggplot(aes(model, R2, shape=Bloom, colour=modType, group=model)) +
-  geom_hline(yintercept=0, colour="grey30", size=0.25) +
-  geom_point() + geom_rug(sides="l") +
-  facet_grid(dataSubset~species) + 
-  scale_y_continuous(limits=c(0, 0.6), breaks=c(0, 0.2, 0.4, 0.6)) +
-  scale_colour_manual("Model type", values=modType_cols) +
-  scale_shape_manual(values=c(19,1)) +
-  labs(x="Model", y=expression("Nagelkerke's pseudo-R"^2)) +
-  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
-        panel.grid.minor.y=element_blank(),
-        legend.position="bottom")
-ggsave(glue("figs/R2_Nagelkerke_Bloom_{prior_type}.png"), p, width=10, height=5, units="in")
 
 
 
