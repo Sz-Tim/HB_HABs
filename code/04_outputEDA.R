@@ -168,17 +168,24 @@ p <- thresh.TSS %>%
         legend.position="bottom")
 ggsave(glue("figs/TSS_pBloomThresh_range_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
 
-p <- thresh.TSS %>%
-  filter(dataSubset=="oos") %>%
+opt.TSS <- thresh.TSS %>%
+  filter(dataSubset=="fit") %>%
   group_by(species, model) %>%
   arrange(desc(TSS)) %>%
   slice_head(n=1) %>%
+  ungroup %>%
+  select(species, model, thresh) %>%
+  rename(opt_thresh=thresh)
+p <- thresh.TSS %>%
+  filter(dataSubset=="oos") %>%
+  full_join(., opt.TSS) %>%
+  filter(thresh==opt_thresh) %>%
   ggplot(aes(TSS, model, colour=modType)) + 
   geom_point() + 
   scale_colour_manual(values=modType_cols) +
   facet_grid(.~species) +
   scale_x_continuous(limits=c(-0.1, 1), breaks=seq(0,1,0.25)) +
-  labs(x="TSS", y="", title="Out-of-sample TSS at optimal p(bloom)") +
+  labs(x="TSS", y="", title="Out-of-sample TSS at fitted optimal p(bloom)") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
 ggsave(glue("figs/TSS_pBloomThresh_opt_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
@@ -222,17 +229,24 @@ p <- thresh.HSS %>%
         legend.position="bottom")
 ggsave(glue("figs/HSS_pBloomThresh_range_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
 
-p <- thresh.HSS %>%
-  filter(dataSubset=="oos") %>%
+opt.HSS <- thresh.HSS %>%
+  filter(dataSubset=="fit") %>%
   group_by(species, model) %>%
   arrange(desc(HSS)) %>%
   slice_head(n=1) %>%
+  ungroup %>%
+  select(species, model, thresh) %>%
+  rename(opt_thresh=thresh)
+p <- thresh.HSS %>%
+  filter(dataSubset=="oos") %>%
+  full_join(., opt.HSS) %>%
+  filter(thresh==opt_thresh) %>%
   ggplot(aes(HSS, model, colour=modType)) + 
   geom_point() + 
   scale_colour_manual(values=modType_cols) +
   facet_grid(.~species) +
   scale_x_continuous(limits=c(-0.1, 1), breaks=seq(0,1,0.25)) +
-  labs(x="HSS", y="", title="Out-of-sample HSS at optimal p(bloom)") +
+  labs(x="HSS", y="", title="Out-of-sample HSS at fitted optimal p(bloom)") +
   theme(panel.grid.minor.y=element_blank(),
         legend.position="bottom")
 ggsave(glue("figs/HSS_pBloomThresh_opt_{prior_type}.png"), p, width=10, height=4.5, dpi=300)
