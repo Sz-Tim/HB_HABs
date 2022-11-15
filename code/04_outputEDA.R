@@ -316,7 +316,7 @@ for(j in c("fit", "oos")) {
 auc.f <- dir(glue("figs/performance/"), "auc_.*csv", full.names=T)
 auc.df <- map_dfr(auc.f, ~read_csv(.x, show_col_types=F) %>%
                     mutate(type=str_split_fixed(.x, "_", 4)[,2],
-                           t_m1=str_split_fixed(.x, "_", 4)[,3])) %>%
+                           prior=str_split_fixed(.x, "_", 4)[,3])) %>%
   mutate(type=if_else(grepl("fit", type), "fit", "forecast")) %>%
   mutate(modType=case_when(grepl("fourWk|grand", model) ~ "Null",
                            grepl("glm", model) ~ "GLM",
@@ -327,18 +327,18 @@ auc.df <- map_dfr(auc.f, ~read_csv(.x, show_col_types=F) %>%
                            grepl("bern", model) ~ "Bayes: Logistic",
                            grepl("avg", model) ~ "Ensemble"),
          model=factor(model, levels=mod.i$mod_col, labels=mod.i$mod_short))
-p <- ggplot(auc.df, aes(model, AUC, colour=modType, shape=type)) +
+p <- ggplot(auc.df, aes(model, AUC, colour=modType, shape=prior)) +
   geom_point() +
-  facet_grid(.~species) + 
+  facet_grid(type~species) + 
   scale_colour_manual(values=modType_cols) + 
-  scale_shape_manual(values=c(1, 19)) +
+  scale_shape_manual(values=c("1", "2")) +
   scale_y_continuous(limits=c(0.45, 1), breaks=c(0.5, 0.7, 0.8, 0.9, 1)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5),
         axis.title.x=element_blank(),
         legend.position="bottom",
         legend.title=element_blank(),
         panel.grid.minor.y=element_blank())
-ggsave(glue("figs/AUC_{prior_type}.png"), p, width=7.5, height=4.5)
+ggsave(glue("figs/AUC_{prior_type}.png"), p, width=7.5, height=9)
 
 
 
