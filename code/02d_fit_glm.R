@@ -44,14 +44,9 @@ covar_int.all <- c(
            "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
            "fetch", #"influxwk", 
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
-           # "mo(NcatF1)", "mo(NcatF2)",
-           # "Nbloom1", "Nbloom2",
            "NlnWt1", "NlnWt2",
            "NlnRAvg1", "NlnRAvg2"), 
-         ":ydayCos:ydaySin"),
-  # "mo(NcatF1):mo(NcatF2)",
-  paste0(c("windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk"), 
-         ":fetch")
+         ":ydayCos:ydaySin")
 )
 
 covariate_sets <- list(
