@@ -155,9 +155,9 @@ for(i in length(covariate_sets)) {
   
   # Prior strengths
   pri.var <- switch(prior_strength,
-                    "1"=list(hs1=1, hs2=0.4, b=0.5, de=0.5, i="1-loose"),
-                    "2"=list(hs1=3, hs2=0.2, b=0.2, de=0.1, i="2-medium"),
-                    "3"=list(hs1=5, hs2=0.1, b=0.05, de=0.02, i="3-tight"))
+                    "1"=list(hs1=0.5, hs2=0.6, b=0.75, de=0.75, i="1-loose"),
+                    "2"=list(hs1=1, hs2=0.4, b=0.5, de=0.5, i="2-medium"),
+                    "3"=list(hs1=3, hs2=0.2, b=0.2, de=0.1, i="3-tight"))
   
   # Interaction priors
   if(i.name=="null") { 
