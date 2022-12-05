@@ -72,8 +72,7 @@ hydro.df <- dir("data", "hydro_", full.names=T) %>%
   ungroup %>%
   pivot_wider(names_from=c(res, timespan), values_from=4:ncol(.),
               names_glue="{.value}_{res}_{timespan}")
-# TODO: this is only for WC 1 -- update for > 2019; pretty sure I have this (more or less) on salmon HAB_operational/ptrack/out/init_*
-connect.df <- read_csv(glue("data{sep}connectivity_5e3parts.csv")) %>%
+connect.df <- read_csv(glue("data{sep}influx_20220801.csv")) %>%
   group_by(site.id) %>%
   mutate(influx_wk=zoo::rollsum(influx, 7, align='right', fill="extend")) %>%
   mutate(across(starts_with("influx"), ~log(.x+1)))
@@ -100,14 +99,14 @@ covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
             "wind_L_wk", "windDir_L_wk",
             "water_L_wk", "waterDir_L_wk", 
             "water_R_wk", "waterDir_R_wk",
-            "fetch", #"influxwk",  
+            "fetch", "influx_wk",  
             "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk")
 covar_int.all <- c(
   "ydayCos", "ydaySin",
   paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
            "tempStrat20mLwk", "tempStrat20mRwk",
            "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
-           "fetch", #"influxwk", 
+           "fetch", "influxwk", 
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
            "NlnWt1", "NlnWt2",
            "NlnRAvg1", "NlnRAvg2"), 
@@ -117,7 +116,7 @@ covar_s.all <- c(
   "tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
   "tempStrat20mLwk", "tempStrat20mRwk",
   "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
-  "fetch", #"influxwk", 
+  "fetch", "influxwk", 
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
   "NlnWt1", "NlnWt2",
   "NlnRAvg1", "NlnRAvg2"
@@ -233,7 +232,7 @@ for(i in length(covariate_sets)) {
            waterVelR=waterRwk*waterDirRwk) %>%
     select(siteid, lon, lat, date, year, obsid,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
-           one_of(covars, covar_int, covar_s)) %>% #, covar_date)) %>%
+           one_of(covars, covar_int, covar_s)) %>%
     filter(complete.cases(.)) %>%
     mutate(covarSet=i.name,
            NlnRAvg1=NA,
@@ -242,7 +241,7 @@ for(i in length(covariate_sets)) {
            lat_sc=LaplacesDemon::CenterScale(lat),
            species=target) %>%
     filter(!siteid %in% c(70, 74, 75, 80, 88))
-  # TODO: I don't remember why these sites are excluded
+  
   
   if("NlnRAvg1" %in% covar_s) {
     for(j in 1:nrow(target.df)) {
