@@ -9,7 +9,7 @@
 # set up ------------------------------------------------------------------
 
 # devtools::install_github("https://github.com/Sz-Tim/WeStCOMS")
-pkgs <- c("tidyverse", "glue", "lubridate", "sf", "jsonlite", "WeStCOMS")
+pkgs <- c("raster", "tidyverse", "glue", "lubridate", "sf", "jsonlite", "WeStCOMS")
 lapply(pkgs, library, character.only=T)
 
 cores <- 60
@@ -22,12 +22,14 @@ if(.Platform$OS.type=="unix") {
                          c("minch2/Archive/", "WeStCOMS2/Archive/"))
   mesh.f <- paste0("/home/sa04ts/FVCOM_meshes/",
                    c("WeStCOMS_mesh.gpkg", "WeStCOMS2_mesh.gpkg"))
+  fetch <- "../../gis/fetch/log10_eu200m1a.tif"
 } else {
   sep <- "\\"
   westcoms.dir <- paste0("D:\\hydroOut\\", 
                          c("minch2\\Archive\\", "WeStCOMS2\\Archive\\"))
   mesh.f <- paste0("C:\\Users\\sa04ts\\OneDrive - SAMS\\Projects\\WeStCOMS\\data\\",
                    c("WeStCOMS_mesh.gpkg", "WeStCOMS2_mesh.gpkg"))
+  fetch <- "../../00_gis/fetch/log10_eu200m1a.tif"
 }
 
 
@@ -37,6 +39,7 @@ if(.Platform$OS.type=="unix") {
 # load files --------------------------------------------------------------
 
 mesh.sf <- map(mesh.f, loadMesh) 
+fetch.tif <- raster(fetch)
 
 fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>% 
   as_tibble %>% 
@@ -79,6 +82,14 @@ sampling.local <- fsa.df %>%
   bind_rows %>%
   mutate(depth=pmin(10, depth.elem),
          obs.id=row_number())
+
+fetch.df <- sampling.local %>% 
+  group_by(site.id) %>%
+  summarise(lon=mean(lon), lat=mean(lat)) %>%
+  st_as_sf(coords=c("lon", "lat"), crs=27700) %>%
+  mutate(fetch=raster::extract(fetch.tif, .))
+
+sampling.local <- full_join(sampling.local, st_drop_geometry(fetch.df))
 
 sampling.regional <- sampling.local %>%
   select(-site.elem, -depth.elem, -starts_with("trinode")) %>%
