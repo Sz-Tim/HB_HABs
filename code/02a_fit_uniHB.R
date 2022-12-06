@@ -71,13 +71,32 @@ hydro.df <- dir("data", "hydro_", full.names=T) %>%
   summarise(across(where(is.numeric), ~mean(.x, na.rm=T))) %>%
   ungroup %>%
   pivot_wider(names_from=c(res, timespan), values_from=4:ncol(.),
-              names_glue="{.value}_{res}_{timespan}")
+              names_glue="{.value}_{res}_{timespan}") %>%
+  select(obs.id, ends_with("wk")) %>%
+  left_join(., sampling.df %>% select(obs.id, site.id, date)) %>%
+  filter(complete.cases(.)) %>%
+  mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
+  group_by(site.id) %>%
+  mutate(across(ends_with("wk"),
+                ~detrend_loess(day_cumul, .x, span="adapt"), 
+                .names="{.col}_dt")) %>%
+  ungroup
 connect.df <- read_csv(glue("data{sep}influx_20220801.csv")) %>%
+  mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
   group_by(site.id) %>%
   mutate(influx_wk=zoo::rollsum(influx, 7, align='right', fill="extend")) %>%
-  mutate(across(starts_with("influx"), ~log(.x+1)))
+  mutate(across(starts_with("influx"), ~log(.x+1))) %>%
+  ungroup
 cprn.df <- read_csv("data/cprn.csv") %>%
-  select(site.id, date, attn_wk, chl_wk, dino_wk, o2_wk, ph_wk, po4_wk)
+  select(site.id, date, attn_wk, chl_wk, dino_wk, o2_wk, ph_wk, po4_wk) %>%
+  filter(complete.cases(.)) %>%
+  mutate(across(ends_with("wk"), log1p)) %>%
+  mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
+  group_by(site.id) %>%
+  mutate(across(ends_with("wk"),
+                ~detrend_loess(day_cumul, .x, span=0.1), 
+                .names="{.col}_dt")) %>%
+  ungroup
 site.100k <-  read_csv("data/fsa_site_pairwise_distances.csv") %>% 
   bind_rows(tibble(origin=unique(.$origin), 
                    destination=unique(.$origin), 
@@ -94,13 +113,22 @@ site.100k <-  read_csv("data/fsa_site_pairwise_distances.csv") %>%
 # >0.85 cor(res) = short_wave, km, precip, wind, windDir
 # >0.85 cor(time) = water
 # waterDir is more variable across all 4
-covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
-            "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
-            "wind_L_wk", "windDir_L_wk",
-            "water_L_wk", "waterDir_L_wk", 
-            "water_R_wk", "waterDir_R_wk",
-            "fetch", "influx_wk",  
-            "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk")
+covars.all <- c(
+  # WeStCOMS weekly averages
+  "temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
+  "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
+  "wind_L_wk", "windDir_L_wk",
+  "water_L_wk", "waterDir_L_wk", 
+  "water_R_wk", "waterDir_R_wk",
+  # external forcings          
+  "fetch", "influx_wk",
+  # Copernicus
+  "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk",
+  # detrended WeStCOMS, Copernicus (cor < 0.8 with original)          
+  "temp_L_wk_dt", "salinity_L_wk_dt", "short_wave_L_wk_dt", 
+  "precip_L_wk_dt", "tempStrat20m_L_wk_dt", "tempStrat20m_R_wk_dt",
+  "wind_L_wk_dt", "water_L_wk_dt", "water_R_wk_dt", 
+  "chl_wk_dt", "o2_wk_dt", "ph_wk_dt", "po4_wk_dt")
 covar_int.all <- c(
   "ydayCos", "ydaySin",
   paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
@@ -108,6 +136,10 @@ covar_int.all <- c(
            "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
            "fetch", "influxwk", 
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
+           "tempLwkdt", "salinityLwkdt", "shortwaveLwkdt", 
+           "precipLwkdt", "tempStrat20mLwkdt", "tempStrat20mRwkdt",
+           "windLwkdt", "waterLwkdt", "waterRwkdt", 
+           "chlwkdt", "o2wkdt", "phwkdt", "po4wkdt",
            "NlnWt1", "NlnWt2",
            "NlnRAvg1", "NlnRAvg2"), 
          ":ydayCos:ydaySin")
@@ -118,6 +150,10 @@ covar_s.all <- c(
   "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
   "fetch", "influxwk", 
   "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
+  "tempLwkdt", "salinityLwkdt", "shortwaveLwkdt", 
+  "precipLwkdt", "tempStrat20mLwkdt", "tempStrat20mRwkdt",
+  "windLwkdt", "waterLwkdt", "waterRwkdt", 
+  "chlwkdt", "o2wkdt", "phwkdt", "po4wkdt",
   "NlnWt1", "NlnWt2",
   "NlnRAvg1", "NlnRAvg2"
 )

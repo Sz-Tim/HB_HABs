@@ -126,3 +126,22 @@ best_xgb <- function(df_train, max_depth=2:6, eta=seq(0.01, 2, by=0.01),
                  nthread=nthread, nrounds=10, objective="binary:logistic")
   return(out)
 }
+
+
+
+
+
+# modified from astsa::trend
+detrend_loess <- function (x, y, span=0.75, robust=TRUE) {
+  if(length(y) < 30 | diff(range(y))==0) {
+    return(y - mean(y))
+  }
+  if(span=="adapt") {
+    span <- 0.1
+    if(length(y) < 100) span <- 0.2
+    if(length(y) < 40) span <- 0.4
+  }
+  fam = ifelse(robust, "symmetric", "gaussian")
+  lo = stats::predict(stats::loess(y ~ x, span=span, family=fam), se = F)
+  return(c(y - lo))
+}
