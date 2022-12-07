@@ -11,6 +11,7 @@
 # devtools::install_github("https://github.com/Sz-Tim/WeStCOMS")
 pkgs <- c("raster", "tidyverse", "glue", "lubridate", "sf", "jsonlite", "WeStCOMS")
 lapply(pkgs, library, character.only=T)
+source("code/00_fn.R")
 
 cores <- 60
 nLags <- 7
@@ -39,6 +40,7 @@ if(.Platform$OS.type=="unix") {
 # load files --------------------------------------------------------------
 
 mesh.sf <- map(mesh.f, loadMesh) 
+mesh.fp <- st_union(mesh.sf[[2]])
 fetch.tif <- raster(fetch)
 
 fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>% 
@@ -68,6 +70,10 @@ fsa.df <- fromJSON(glue("data{sep}copy_fsa.txt")) %>%
            as.numeric) %>%
   select(-geom, -easting, -northing, -tide, -datetime_collected)
 
+site.df <- fsa.df %>%  
+  select(site.id, sin, area, site, lon, lat, grid) %>%
+  group_by(site.id) %>% slice_head(n=1) %>% ungroup
+
 sampling.local <- fsa.df %>%
   group_by(grid) %>%
   group_split() %>%
@@ -83,13 +89,13 @@ sampling.local <- fsa.df %>%
   mutate(depth=pmin(10, depth.elem),
          obs.id=row_number())
 
-fetch.df <- sampling.local %>% 
-  group_by(site.id) %>%
-  summarise(lon=mean(lon), lat=mean(lat)) %>%
-  st_as_sf(coords=c("lon", "lat"), crs=27700) %>%
-  mutate(fetch=raster::extract(fetch.tif, .))
+site.df <- site.df %>%
+  st_as_sf(coords=c("lon", "lat"), crs=27700, remove=F) %>%
+  mutate(fetch=raster::extract(fetch.tif, .)) %>%
+  st_drop_geometry() %>%
+  find_open_bearing(., mesh.fp, buffer=50e3, nDir=24)
 
-sampling.local <- full_join(sampling.local, st_drop_geometry(fetch.df))
+sampling.local <- left_join(sampling.local, site.df %>% select(site.id, fetch, openBearing))
 
 sampling.regional <- sampling.local %>%
   select(-site.elem, -depth.elem, -starts_with("trinode")) %>%
@@ -109,6 +115,11 @@ sampling.regional <- sampling.local %>%
 
 write_csv(sampling.local, glue("data{sep}sampling_local.csv"))
 write_csv(sampling.regional, glue("data{sep}sampling_regional.csv"))
+sampling.local %>%  
+  select(site.id, sin, area, site, lon, lat, grid, site.elem, starts_with("trinode"), fetch, openBearing) %>%
+  group_by(site.id) %>% slice_head(n=1) %>% 
+  write_csv(glue("data{sep}site_id.csv"))
+
 
 
 

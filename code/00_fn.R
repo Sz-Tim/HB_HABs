@@ -145,3 +145,46 @@ detrend_loess <- function (x, y, span=0.75, robust=TRUE) {
   lo = stats::predict(stats::loess(y ~ x, span=span, family=fam), se = F)
   return(c(y - lo))
 }
+
+
+
+
+
+find_open_bearing <- function(site.df, mesh.fp, buffer=10e3, nDir=24) {
+  library(tidyverse); library(sf)
+  
+  hub.df <- site.df %>% 
+    select(site.id, lon, lat) %>%
+    st_as_sf(coords=c("lon", "lat"), crs=27700)
+  spoke.df <- hub.df %>%
+    st_buffer(dist=buffer, nQuadSegs=nDir/4) %>%
+    st_cast("POINT") %>%
+    group_by(site.id) %>%
+    mutate(spoke.id=row_number()) %>%
+    filter(spoke.id <= nDir) 
+  hubRep.df <- full_join(hub.df, spoke.df %>% st_drop_geometry())
+  coords <- cbind(st_coordinates(hubRep.df), st_coordinates(spoke.df))
+  spoke.lines <- lapply(1:nrow(coords),
+                        function(i){
+                          st_linestring(matrix(coords[i,], ncol=2, byrow=TRUE))
+                        }) %>%
+    st_sfc() %>% st_as_sf() %>% st_set_crs(27700) %>%
+    rename(geometry=x) %>%
+    mutate(site.id=spoke.df$site.id,
+           spoke.id=spoke.df$spoke.id)
+  spoke.mesh <- st_intersection(spoke.lines, mesh.fp) %>%
+    st_cast("LINESTRING") %>%
+    mutate(len=round(as.numeric(st_length(.)))) %>%
+    group_by(site.id) %>%
+    filter(len==max(len)) %>%
+    ungroup %>%
+    st_cast("POINT")
+  bearings <- as.numeric(lwgeom::st_geod_azimuth(st_transform(spoke.mesh, 4326)))
+  bearing.df <- spoke.mesh[1:nrow(spoke.mesh) %% 2 == 0,] %>%
+    st_drop_geometry() %>%
+    mutate(bearing=bearings[1:length(bearings) %% 2 == 1]) %>%
+    group_by(site.id) %>%
+    summarise(openBearing=median(bearing)) %>%
+    ungroup
+  return(full_join(site.df, bearing.df, by="site.id"))
+}
