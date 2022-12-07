@@ -87,7 +87,7 @@ connect.df <- read_csv(glue("data{sep}influx_20220801.csv")) %>%
   mutate(influx_wk=zoo::rollsum(influx, 7, align='right', fill="extend")) %>%
   mutate(across(starts_with("influx"), ~log(.x+1))) %>%
   ungroup
-cprn.df <- read_csv("data/cprn.csv") %>%
+cprn.df <- read_csv("data/cprn_20211231.csv") %>%
   select(site.id, date, attn_wk, chl_wk, dino_wk, o2_wk, ph_wk, po4_wk) %>%
   filter(complete.cases(.)) %>%
   mutate(across(ends_with("wk"), log1p)) %>%
@@ -233,12 +233,11 @@ for(i in length(covariate_sets)) {
   
   target.df <- sampling.df %>%
     rename(N=!!target) %>%
-    select(obs.id, site.id, date, hour, grid, lon, lat, fetch, bearing, N) %>%
+    select(obs.id, site.id, date, hour, grid, lon, lat, fetch, openBearing, N) %>%
     mutate(yday=yday(date),
            ydayCos=cos(2*pi*yday/365),
            ydaySin=sin(2*pi*yday/365),
            year=year(date),
-           bearing=bearing*pi/180, # Nearest shore: N=pi, S=0
            N=round(N),
            N.ln=log(N+1)) %>%
     rowwise() %>%
@@ -258,14 +257,14 @@ for(i in length(covariate_sets)) {
     full_join(hydro.df) %>%
     full_join(connect.df) %>%
     full_join(cprn.df) %>%
-    mutate(across(contains("Dir_"), ~cos(.x-bearing))) %>% # -1 = toward shore, 1 = away from shore
-    mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), LaplacesDemon::CenterScale)) %>%
-    arrange(site.id, date) %>%
-    rename_with(~str_remove_all(.x, "\\.|_")) %>%
+    mutate(across(contains("Dir_"), ~cos(.x-openBearing))) %>% # -1 = toward open ocean, 1 = in from open ocean
     mutate(ydaySC=ydaySin*ydayCos,
-           windVel=windLwk*windDirLwk,
-           waterVelL=waterLwk*waterDirLwk,
-           waterVelR=waterRwk*waterDirRwk) %>%
+           windVel=wind_L_wk*windDir_L_wk,
+           waterVelL=water_L_wk*waterDir_L_wk,
+           waterVelR=water_R_wk*waterDir_R_wk) %>%
+    mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), LaplacesDemon::CenterScale)) %>%
+    rename_with(~str_remove_all(.x, "\\.|_")) %>%
+    arrange(siteid, date) %>%
     select(siteid, lon, lat, date, year, obsid,
            starts_with("N"), starts_with("date_"), starts_with("yday"),
            one_of(covars, covar_int, covar_s)) %>%
@@ -275,8 +274,7 @@ for(i in length(covariate_sets)) {
            NlnRAvg2=NA,
            lon_sc=LaplacesDemon::CenterScale(lon),
            lat_sc=LaplacesDemon::CenterScale(lat),
-           species=target) %>%
-    filter(!siteid %in% c(70, 74, 75, 80, 88))
+           species=target) 
   
   
   if("NlnRAvg1" %in% covar_s) {
