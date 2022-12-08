@@ -3,7 +3,7 @@
 # Tim Szewczyk
 
 
-# This script fits models with data from 2013-2017 using horseshoe priors
+# This script fits models with data from 2013-2021 using horseshoe priors
 
 
 

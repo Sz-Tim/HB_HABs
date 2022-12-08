@@ -14,6 +14,8 @@ pkgs <- c("tidyverse", "lubridate", "glue",
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
+options(mc.cores=10)
+cores <- 2
 
 # Model details
 
@@ -23,7 +25,7 @@ sep <- ifelse(.Platform$OS.type=="unix", "/", "\\")
 
 sp.i <- read_csv("data/sp_i.csv")
 
-sp <- 1
+sp <- 5
 
 
 
@@ -31,13 +33,22 @@ sp <- 1
 
 species <- sp.i$full
 
-covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
-            "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
-            "wind_L_wk", "windDir_L_wk",
-            "water_L_wk", "waterDir_L_wk", 
-            "water_R_wk", "waterDir_R_wk",
-            "fetch", #"influxwk",  
-            "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk")
+covars.all <- c(
+  # WeStCOMS weekly averages
+  "temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
+  "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
+  "wind_L_wk", "windDir_L_wk",
+  "water_L_wk", "waterDir_L_wk", "waterVelL",
+  "water_R_wk", "waterDir_R_wk", "waterVelR",
+  # external forcings          
+  "fetch", "influx_wk",
+  # Copernicus
+  "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk",
+  # detrended WeStCOMS, Copernicus (cor < 0.8 with original)          
+  "temp_L_wk_dt", "salinity_L_wk_dt", "short_wave_L_wk_dt", 
+  "precip_L_wk_dt", "tempStrat20m_L_wk_dt", "tempStrat20m_R_wk_dt",
+  "wind_L_wk_dt", "water_L_wk_dt", "water_R_wk_dt", 
+  "chl_wk_dt", "o2_wk_dt", "ph_wk_dt", "po4_wk_dt")
 
 covariate_sets <- list(
   # null="NA",
@@ -60,7 +71,7 @@ for(i in length(covariate_sets)) {
   # initial fit -------------------------------------------------------------
   
   target <- species[sp]
-  f.prefix <- glue("out{sep}full{sep}")
+  f.prefix <- glue("out{sep}1-loose{sep}")
   f.suffix <- glue("{i.name}_{target}")
   
   target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
@@ -91,22 +102,25 @@ for(i in length(covariate_sets)) {
   saveRDS(rf, glue("{f.prefix}rf_{f.suffix}.rds"))
   saveRDS(rf.01, glue("{f.prefix}rf01_{f.suffix}.rds"))
   saveRDS(rf.11, glue("{f.prefix}rf11_{f.suffix}.rds"))
+  cat("Finished rf:", target, "\n")
   
   #svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
-  svm_rng <- list(cost=10^(-2:2), gamma=2^(-2:2))
+  svm_rng <- list(cost=10^(-2:2), gamma=2^(-4:2))
   svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
   svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
   svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng)
   saveRDS(svm_, glue("{f.prefix}svm_{f.suffix}.rds"))
   saveRDS(svm_01, glue("{f.prefix}svm01_{f.suffix}.rds"))
   saveRDS(svm_11, glue("{f.prefix}svm11_{f.suffix}.rds"))
+  cat("Finished svm:", target, "\n")
   
-  xg <- best_xgb(train.ML)
-  xg.01 <- best_xgb(train.ML01)
-  xg.11 <- best_xgb(train.ML11)
+  xg <- best_xgb(train.ML, nthread=cores)
+  xg.01 <- best_xgb(train.ML01, nthread=cores)
+  xg.11 <- best_xgb(train.ML11, nthread=cores)
   saveRDS(xg, glue("{f.prefix}xgb_{f.suffix}.rds"))
   saveRDS(xg.01, glue("{f.prefix}xgb01_{f.suffix}.rds"))
   saveRDS(xg.11, glue("{f.prefix}xgb11_{f.suffix}.rds"))
+  cat("Finished xgb:", target, "\n")
   
   # Fitted
   fit.df <- full_join(
@@ -170,6 +184,7 @@ for(i in length(covariate_sets)) {
   yrCV <- unique(train.df$year)
   cv_pred <- map(yrCV, ~NULL)
   for(k in 1:length(yrCV)) {
+    cat("Starting cross-validation:", k, "of", length(yrCV), "\n")
     yr <- yrCV[k]
     cv_train.df <- train.df %>% filter(year != yr)
     cv_test.df <- train.df %>% filter(year == yr)
@@ -193,14 +208,14 @@ for(i in length(covariate_sets)) {
     rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F, ntree=1000)
     rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F, ntree=1000)
     
-    svm_rng <- list(cost=10^(-2:2), gamma=2^(-2:2))
+    svm_rng <- list(cost=10^(-2:2), gamma=2^(-4:2))
     svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng, kernel="radial")
     svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng, kernel="radial")
     svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng, kernel="radial")
     
-    xg <- best_xgb(train.ML)
-    xg.01 <- best_xgb(train.ML01)
-    xg.11 <- best_xgb(train.ML11)
+    xg <- best_xgb(train.ML, nthread=cores)
+    xg.01 <- best_xgb(train.ML01, nthread=cores)
+    xg.11 <- best_xgb(train.ML11, nthread=cores)
     
     
     # Cross-validation predictions

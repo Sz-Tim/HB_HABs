@@ -9,7 +9,7 @@
 
 # set up ------------------------------------------------------------------
 
-pkgs <- c("tidyverse", "lubridate", "glue", "lme4")
+pkgs <- c("tidyverse", "lubridate", "glue", "lme4", "glmnet")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
@@ -29,21 +29,33 @@ sp.i <- read_csv("data/sp_i.csv")
 
 species <- sp.i$full
 
-covars.all <- c("temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
-            "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
-            "wind_L_wk", "windDir_L_wk",
-            "water_L_wk", "waterDir_L_wk", 
-            "water_R_wk", "waterDir_R_wk",
-            "fetch", #"influxwk",  
-            "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk")
-
+covars.all <- c(
+  # WeStCOMS weekly averages
+  "temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
+  "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
+  "wind_L_wk", "windDir_L_wk",
+  "water_L_wk", "waterDir_L_wk", "waterVelL",
+  "water_R_wk", "waterDir_R_wk", "waterVelR",
+  # external forcings          
+  "fetch", "influx_wk",
+  # Copernicus
+  "attn_wk", "chl_wk", "dino_wk", "o2_wk", "ph_wk", "po4_wk",
+  # detrended WeStCOMS, Copernicus (cor < 0.8 with original)          
+  "temp_L_wk_dt", "salinity_L_wk_dt", "short_wave_L_wk_dt", 
+  "precip_L_wk_dt", "tempStrat20m_L_wk_dt", "tempStrat20m_R_wk_dt",
+  "wind_L_wk_dt", "water_L_wk_dt", "water_R_wk_dt", 
+  "chl_wk_dt", "o2_wk_dt", "ph_wk_dt", "po4_wk_dt")
 covar_int.all <- c(
   "ydayCos", "ydaySin",
   paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
            "tempStrat20mLwk", "tempStrat20mRwk",
            "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
-           "fetch", #"influxwk", 
+           "fetch", "influxwk", 
            "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
+           "tempLwkdt", "salinityLwkdt", "shortwaveLwkdt", 
+           "precipLwkdt", "tempStrat20mLwkdt", "tempStrat20mRwkdt",
+           "windLwkdt", "waterLwkdt", "waterRwkdt", 
+           "chlwkdt", "o2wkdt", "phwkdt", "po4wkdt",
            "NlnWt1", "NlnWt2",
            "NlnRAvg1", "NlnRAvg2"), 
          ":ydayCos:ydaySin")
@@ -72,7 +84,7 @@ for(i in length(covariate_sets)) {
   
   for(sp in 1:5) {
     target <- species[sp]
-    f.prefix <- glue("out{sep}full{sep}")
+    f.prefix <- glue("out{sep}1-loose{sep}")
     f.suffix <- glue("{i.name}_{target}")
     
     target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
@@ -94,10 +106,22 @@ for(i in length(covariate_sets)) {
     saveRDS(out.01, glue("{f.prefix}glm01_{f.suffix}.rds"))
     saveRDS(out.11, glue("{f.prefix}glm11_{f.suffix}.rds"))
     
+    covar_intIndiv <- str_remove(covar_int.all, ":ydayCos:ydaySin")[-c(1,2)]
+    train.lasso <- train.df %>% 
+      mutate(lonlat=lon_sc*lat_sc) %>%
+      select(Nbloom, ydaySin, ydayCos, all_of(covar_intIndiv), lonlat) %>%
+      mutate(across(all_of(covar_intIndiv), ~.x*ydayCos*ydaySin))
+    cv.lasso <- cv.glmnet(as.matrix(train.lasso[,-1]), train.lasso$Nbloom, 
+                          family="binomial", alpha=1)
+    out.lasso <- glmnet(as.matrix(train.lasso[,-1]), train.lasso$Nbloom, 
+                        family="binomial", alpha=1, lambda=cv.lasso$lambda.min)
+    saveRDS(out.lasso, glue("{f.prefix}glmLasso_{f.suffix}.rds"))
+    
     # Fitted
     fit.df <- full_join(
       train.df %>%
-        mutate(glm_mnpr=fitted(out)),
+        mutate(glm_mnpr=fitted(out),
+               glmLasso_mnpr=predict(out.lasso, as.matrix(train.lasso[,-1]), type="response")[,1]),
       tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
              glm_split_mnpr=c(fitted(out.01), fitted(out.11)))
     ) %>%
@@ -106,9 +130,14 @@ for(i in length(covariate_sets)) {
     write_csv(fit.df, glue("{f.prefix}fit_glm_{f.suffix}.csv"))
     
     # OOS predictions
+    test.lasso <- test.df %>% 
+      mutate(lonlat=lon_sc*lat_sc) %>%
+      select(Nbloom, ydaySin, ydayCos, all_of(covar_intIndiv), lonlat) %>%
+      mutate(across(all_of(covar_intIndiv), ~.x*ydayCos*ydaySin))
     test.df01 <- test.df %>% filter(Nbloom1==0) %>% droplevels
     test.df11 <- test.df %>% filter(Nbloom1==1) %>% droplevels
     pred.glm <- predict(out, newdata=test.df, type="response", allow.new.levels=T)
+    pred.lasso <- predict(out.lasso, as.matrix(test.lasso[,-1]), type="response")[,1]
     pred.glm_01 <- predict(out.01, newdata=test.df01, type="response", allow.new.levels=T)
     if(nrow(test.df11) > 0) {
       pred.glm_11 <- predict(out.11, newdata=test.df11, type="response", allow.new.levels=T)
@@ -118,7 +147,8 @@ for(i in length(covariate_sets)) {
     
     pred.df <- full_join(
       test.df %>%
-        mutate(glm_mnpr=pred.glm),
+        mutate(glm_mnpr=pred.glm,
+               glmLasso_mnpr=pred.lasso),
       tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
              glm_split_mnpr=c(pred.glm_01, pred.glm_11))
     ) %>%
@@ -141,10 +171,24 @@ for(i in length(covariate_sets)) {
       out.01 <- glm(form, data=cv_train.df %>% filter(Nbloom1==0), family="binomial")
       out.11 <- glm(form, data=cv_train.df %>% filter(Nbloom1==1), family="binomial")
       
+      train.lasso <- cv_train.df %>% 
+        mutate(lonlat=lon_sc*lat_sc) %>%
+        select(Nbloom, ydaySin, ydayCos, all_of(covar_intIndiv), lonlat) %>%
+        mutate(across(all_of(covar_intIndiv), ~.x*ydayCos*ydaySin))
+      cv.lasso <- cv.glmnet(as.matrix(train.lasso[,-1]), train.lasso$Nbloom, 
+                            family="binomial", alpha=1)
+      out.lasso <- glmnet(as.matrix(train.lasso[,-1]), train.lasso$Nbloom, 
+                          family="binomial", alpha=1, lambda=cv.lasso$lambda.min)
+      
       # Cross-validation predictions
+      test.lasso <- cv_test.df %>% 
+        mutate(lonlat=lon_sc*lat_sc) %>%
+        select(Nbloom, ydaySin, ydayCos, all_of(covar_intIndiv), lonlat) %>%
+        mutate(across(all_of(covar_intIndiv), ~.x*ydayCos*ydaySin))
       cv_test.df01 <- cv_test.df %>% filter(Nbloom1==0) %>% droplevels
       cv_test.df11 <- cv_test.df %>% filter(Nbloom1==1) %>% droplevels
       pred.glm <- predict(out, newdata=cv_test.df, type="response", allow.new.levels=T)
+      pred.lasso <- predict(out.lasso, as.matrix(test.lasso[,-1]), type="response")[,1]
       pred.glm_01 <- predict(out.01, newdata=cv_test.df01, type="response", allow.new.levels=T)
       if(nrow(cv_test.df11) > 0) {
         pred.glm_11 <- predict(out.11, newdata=cv_test.df11, type="response", allow.new.levels=T)
@@ -154,7 +198,8 @@ for(i in length(covariate_sets)) {
       
       cv_pred[[k]] <- full_join(
         cv_test.df %>%
-          mutate(glm_mnpr=pred.glm),
+          mutate(glm_mnpr=pred.glm,
+                 glmLasso_mnpr=pred.lasso),
         tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
                glm_split_mnpr=c(pred.glm_01, pred.glm_11))
       ) %>%
