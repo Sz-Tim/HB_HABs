@@ -332,14 +332,14 @@ p <- ggplot(auc.df, aes(model, AUC, colour=modType, shape=prior)) +
   geom_point() +
   facet_grid(type~species) + 
   scale_colour_manual(values=modType_cols) + 
-  scale_shape_manual(values=c("1", "2")) +
+  scale_shape_manual(values=c("1", "2", "3")) +
   scale_y_continuous(limits=c(0.45, 1), breaks=c(0.5, 0.7, 0.8, 0.9, 1)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5),
         axis.title.x=element_blank(),
         legend.position="bottom",
         legend.title=element_blank(),
         panel.grid.minor.y=element_blank())
-ggsave(glue("figs/AUC_{prior_type}.png"), p, width=7.5, height=9)
+ggsave(glue("figs/AUC_{prior_type}.png"), p, width=8, height=7)
 
 
 
