@@ -131,18 +131,17 @@ covars.all <- c(
   "chl_wk_dt", "o2_wk_dt", "ph_wk_dt", "po4_wk_dt")
 covar_int.all <- c(
   "ydayCos", "ydaySin",
-  paste0(c("tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
-           "tempStrat20mLwk", "tempStrat20mRwk",
-           "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
-           "fetch", "influxwk", 
-           "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
-           "tempLwkdt", "salinityLwkdt", "shortwaveLwkdt", 
-           "precipLwkdt", "tempStrat20mLwkdt", "tempStrat20mRwkdt",
-           "windLwkdt", "waterLwkdt", "waterRwkdt", 
-           "chlwkdt", "o2wkdt", "phwkdt", "po4wkdt",
-           "NlnWt1", "NlnWt2",
-           "NlnRAvg1", "NlnRAvg2"), 
-         ":ydayCos:ydaySin")
+  "tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
+  "tempStrat20mLwk", "tempStrat20mRwk",
+  "windVel", "waterVelL", "waterVelR", "windLwk", "waterLwk", "waterRwk",
+  "fetch", "influxwk", 
+  "attnwk", "chlwk", "dinowk", "o2wk", "phwk", "po4wk",
+  "tempLwkdt", "salinityLwkdt", "shortwaveLwkdt", 
+  "precipLwkdt", "tempStrat20mLwkdt", "tempStrat20mRwkdt",
+  "windLwkdt", "waterLwkdt", "waterRwkdt", 
+  "chlwkdt", "o2wkdt", "phwkdt", "po4wkdt",
+  "NlnWt1", "NlnWt2",
+  "NlnRAvg1", "NlnRAvg2"
 )
 covar_s.all <- c(
   "tempLwk", "salinityLwk", "shortwaveLwk", "kmLwk", "precipLwk",
