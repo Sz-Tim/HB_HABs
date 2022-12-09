@@ -294,6 +294,7 @@ for(j in c("fit", "oos")) {
     pivot_longer(-species, names_to="model", values_to="AUC") %>%
     mutate(model=factor(model, levels=names(ROC_cols)))  %>%
     mutate(modType=case_when(grepl("fourWk|grand", model) ~ "Null",
+                             grepl("glm", model) ~ "GLM",
                              grepl("rf", model) ~ "ML: RF",
                              grepl("^svm", model) ~ "ML: SVM",
                              grepl("^xgb", model) ~ "ML: XGB",
