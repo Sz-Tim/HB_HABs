@@ -17,7 +17,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-prior_type <- "2-medium"
+prior_type <- c("1-loose", "2-medium", "3-tight")[2]
 out.dir <- glue("out/{prior_type}/")
 
 sp.i <- read_csv("data/sp_i.csv")
@@ -636,3 +636,7 @@ p <- ggplot(pred.bern01, aes(date, pred, colour=x_var, group=paste(x_var, siteid
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
 ggsave(glue("figs/effects_bern01_{prior_type}.png"), p, width=28, height=8)
+
+
+
+
