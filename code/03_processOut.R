@@ -96,7 +96,7 @@ wt.HB <- cv.df %>%
   group_by(species, Nbloom1) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
   mutate(across(contains("svm"), ~0), across(contains("xgb"), ~0), across(contains("rf"), ~0),
-         across(contains("ord_"), ~0), across(contains("bern_"), ~0)) %>%
+         across(contains("glm"), ~0), across(contains("ord_"), ~0), across(contains("bern_"), ~0)) %>%
   mutate(across(ends_with("wt"), ~.x^2/rowSums(across(ends_with("wt"))^2))) %>% 
   ungroup
 
