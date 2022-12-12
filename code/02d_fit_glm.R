@@ -183,7 +183,7 @@ for(i in length(covariate_sets)) {
     
     
     # Cross-validation by year
-    yrCV <- unique(train.df$year)
+    yrCV <- unique(filter(train.df, year>2014)$year)
     cv_pred <- map(yrCV, ~NULL)
     for(k in 1:length(yrCV)) {
       yr <- yrCV[k]

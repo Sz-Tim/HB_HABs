@@ -389,7 +389,7 @@ for(i in length(covariate_sets)) {
   write_csv(pred.df, glue("{f.prefix}pred_HBuv_{f.suffix}.csv"))
   
   # Cross-validation by year
-  yrCV <- unique(train.df$year)
+  yrCV <- unique(filter(train.df, year>2014)$year)
   cv_pred <- map(yrCV, ~NULL)
   for(k in 1:length(yrCV)) {
     yr <- yrCV[k]
