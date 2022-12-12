@@ -37,9 +37,9 @@ covars.all <- c(
   # WeStCOMS weekly averages
   "temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
   "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
-  "wind_L_wk", "windDir_L_wk",
-  "water_L_wk", "waterDir_L_wk", "waterVelL",
-  "water_R_wk", "waterDir_R_wk", "waterVelR",
+  "wind_L_wk", 
+  "water_L_wk", "waterVelL",
+  "water_R_wk", "waterVelR",
   # external forcings          
   "fetch", "influx_wk",
   # Copernicus
@@ -61,8 +61,8 @@ covariate_sets <- list(
 )
 
 
-
-for(i in length(covariate_sets)) {
+i <- 1
+# for(i in length(covariate_sets)) {
   i.name <- names(covariate_sets)[i]
   i.covs <- covariate_sets[[i]]
   covars <- covars.all[grepl(i.covs, str_remove_all(covars.all, "\\.|_"))] %>%
@@ -84,17 +84,17 @@ for(i in length(covariate_sets)) {
   # Machine Learning: Random Forest, Support Vector Machine, XGBoost
   ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covars)
   train.ML <- train.df %>% select(one_of(ML_vars)) %>% 
-    mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
   train.ML01 <- train.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
-    mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
   train.ML11 <- train.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
-    mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
   test.ML <- test.df %>% select(one_of(ML_vars)) %>% 
-    mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
   test.ML01 <- test.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
-    mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
   test.ML11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
-    mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+    mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
   
   rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F)
   rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F)
@@ -104,19 +104,26 @@ for(i in length(covariate_sets)) {
   saveRDS(rf.11, glue("{f.prefix}rf11_{f.suffix}.rds"))
   cat("Finished rf:", target, "\n")
   
-  #svm_rng <- list(epsilon=seq(0,0.5,0.05), cost=2^(seq(3,7,0.2)))
-  svm_rng <- list(cost=10^(-2:2), gamma=2^(-4:2))
-  svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng)
-  svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng)
-  svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng)
+  svm.ctrl <- trainControl("repeatedcv", number=6, repeats=3, classProbs=T)
+  svm.tuneGrid <- expand.grid(C=2^(seq(-5,5,length.out=100)))
+  svm_ <- train(Nbloom~., data=train.ML, 
+                method="svmRadialCost", trControl=svm.ctrl,
+                tuneLength=10, tuneGrid=svm.tuneGrid)
+  svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), 
+                  method="svmRadialCost", trControl=svm.ctrl,
+                  tuneLength=10, tuneGrid=svm.tuneGrid)
+  svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), 
+                  method="svmRadialCost", trControl=svm.ctrl,
+                  tuneLength=10, tuneGrid=svm.tuneGrid)
   saveRDS(svm_, glue("{f.prefix}svm_{f.suffix}.rds"))
   saveRDS(svm_01, glue("{f.prefix}svm01_{f.suffix}.rds"))
   saveRDS(svm_11, glue("{f.prefix}svm11_{f.suffix}.rds"))
   cat("Finished svm:", target, "\n")
   
-  xg <- best_xgb(train.ML, nthread=cores)
-  xg.01 <- best_xgb(train.ML01, nthread=cores)
-  xg.11 <- best_xgb(train.ML11, nthread=cores)
+  xg_ctrl <- list(max_depth=2:5, eta=2^(seq(-10,0,length.out=100)))
+  xg <- best_xgb(train.ML, xg_ctrl$max_depth, xg_ctrl$eta, cores)
+  xg.01 <- best_xgb(train.ML01, xg_ctrl$max_depth, xg_ctrl$eta, cores)
+  xg.11 <- best_xgb(train.ML11, xg_ctrl$max_depth, xg_ctrl$eta, cores)
   saveRDS(xg, glue("{f.prefix}xgb_{f.suffix}.rds"))
   saveRDS(xg.01, glue("{f.prefix}xgb01_{f.suffix}.rds"))
   saveRDS(xg.11, glue("{f.prefix}xgb11_{f.suffix}.rds"))
@@ -126,15 +133,12 @@ for(i in length(covariate_sets)) {
   fit.df <- full_join(
     train.df %>%
       mutate(rf_mnpr=rf$votes[,2],
-             svm_mnpr=attr(predict(svm_$best.model, newdata=train.ML[,-1], probability=T),
-                           "probabilities")[,2],
+             svm_mnpr=predict(svm_, train.ML, type="prob")[,2],
              xgb_mnpr=predict(xg, as.matrix(train.ML[,-1]))),
     tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
            rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]),
-           svm_split_mnpr=c(attr(predict(svm_01$best.model, newdata=train.ML01[,-1], probability=T),
-                                 "probabilities")[,2],
-                            attr(predict(svm_11$best.model, newdata=train.ML11[,-1], probability=T),
-                                 "probabilities")[,2]),
+           svm_split_mnpr=c(predict(svm_01, train.ML01, type="prob")[,2],
+                            predict(svm_11, train.ML11, type="prob")[,2]),
            xgb_split_mnpr=c(predict(xg.01, as.matrix(train.ML01[,-1])),
                             predict(xg.11, as.matrix(train.ML11[,-1]))))
   ) %>%
@@ -147,16 +151,13 @@ for(i in length(covariate_sets)) {
   test.df11 <- test.df %>% filter(Nbloom1==1) %>% droplevels
   pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
   pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
-  pred.svm <- attr(predict(svm_$best.model, newdata=test.ML[,-1], probability=T),
-                   "probabilities")[,2]
-  pred.svm_01 <- attr(predict(svm_01$best.model, newdata=test.ML01[,-1], probability=T),
-                      "probabilities")[,2]
+  pred.svm <- predict(svm_, test.ML, type="prob")[,2]
+  pred.svm_01 <- predict(svm_01, test.ML01, type="prob")[,2]
   pred.xgb <- predict(xg, as.matrix(test.ML[,-1]))
   pred.xgb_01 <- predict(xg.01, as.matrix(test.ML01[,-1]))
   if(nrow(test.df11) > 0) {
     pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
-    pred.svm_11 <- attr(predict(svm_11$best.model, newdata=test.ML11[,-1], probability=T),
-                        "probabilities")[,2]
+    pred.svm_11 <- predict(svm_11, test.ML11, type="prob")[,2]
     pred.xgb_11 <- predict(xg.11, as.matrix(test.ML11[,-1]))
   } else {
     pred.rf_11 <- numeric(0)
@@ -181,56 +182,63 @@ for(i in length(covariate_sets)) {
   
   
   # Cross-validation by year
-  yrCV <- unique(train.df$year)
+  yrCV <- unique(filter(train.df, year>2014)$year)
   cv_pred <- map(yrCV, ~NULL)
   for(k in 1:length(yrCV)) {
     cat("Starting cross-validation:", k, "of", length(yrCV), "\n")
     yr <- yrCV[k]
     cv_train.df <- train.df %>% filter(year != yr)
     cv_test.df <- train.df %>% filter(year == yr)
+    folds <- cv_train.df %>% 
+      mutate(rowid=row_number()) %>%
+      group_by(year) %>% 
+      group_split() %>% 
+      map(~c(.x$rowid))
     
     # Machine Learning: Random Forest, Support Vector Machine
     ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covars)
     train.ML <- cv_train.df %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
     train.ML01 <- cv_train.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
     train.ML11 <- cv_train.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
     test.ML <- cv_test.df %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>%  as.data.frame()
+      mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>%  as.data.frame()
     test.ML01 <- cv_test.df %>% filter(Nbloom1==0) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
     test.ML11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
-      mutate(Nbloom=factor(Nbloom)) %>% as.data.frame()
+      mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
     
     rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F, ntree=1000)
     rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F, ntree=1000)
     rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F, ntree=1000)
     
-    svm_rng <- list(cost=10^(-2:2), gamma=2^(-4:2))
-    svm_ <- tune(svm, train.ML[,-1], train.ML[,1], probability=T, ranges=svm_rng, kernel="radial")
-    svm_01 <- tune(svm, train.ML01[,-1], train.ML01[,1], probability=T, ranges=svm_rng, kernel="radial")
-    svm_11 <- tune(svm, train.ML11[,-1], train.ML11[,1], probability=T, ranges=svm_rng, kernel="radial")
+    svm_ <- train(Nbloom~., data=train.ML, 
+                  method="svmRadialCost", trControl=svm.ctrl,
+                  tuneLength=10, tuneGrid=svm.tuneGrid)
+    svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), 
+                    method="svmRadialCost", trControl=svm.ctrl,
+                    tuneLength=10, tuneGrid=svm.tuneGrid)
+    svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), 
+                    method="svmRadialCost", trControl=svm.ctrl,
+                    tuneLength=10, tuneGrid=svm.tuneGrid)
     
-    xg <- best_xgb(train.ML, nthread=cores)
-    xg.01 <- best_xgb(train.ML01, nthread=cores)
-    xg.11 <- best_xgb(train.ML11, nthread=cores)
+    xg <- best_xgb(train.ML, xg_ctrl$max_depth, xg_ctrl$eta, cores)
+    xg.01 <- best_xgb(train.ML01, xg_ctrl$max_depth, xg_ctrl$eta, cores)
+    xg.11 <- best_xgb(train.ML11, xg_ctrl$max_depth, xg_ctrl$eta, cores)
     
     
     # Cross-validation predictions
     pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
     pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
-    pred.svm <- attr(predict(svm_$best.model, newdata=test.ML[,-1], probability=T),
-                     "probabilities")[,2]
-    pred.svm_01 <- attr(predict(svm_01$best.model, newdata=test.ML01[,-1], probability=T),
-                        "probabilities")[,2]
+    pred.svm <- predict(svm_, test.ML, type="prob")[,2]
+    pred.svm_01 <- predict(svm_01, test.ML01, type="prob")[,2]
     pred.xgb <- predict(xg, as.matrix(test.ML[,-1]))
     pred.xgb_01 <- predict(xg.01, as.matrix(test.ML01[,-1]))
     if(nrow(test.ML11) > 0) {
       pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
-      pred.svm_11 <- attr(predict(svm_11$best.model, newdata=test.ML11[,-1], probability=T),
-                          "probabilities")[,2]
+      pred.svm_11 <- predict(svm_11, test.ML11, type="prob")[,2]
       pred.xgb_11 <- predict(xg.11, as.matrix(test.ML11[,-1]))
     } else {
       pred.rf_11 <- numeric(0)
@@ -256,7 +264,7 @@ for(i in length(covariate_sets)) {
   
   
   cat("Finished", target, "\n")
-}
+# }
 
 
 

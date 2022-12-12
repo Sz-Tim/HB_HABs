@@ -100,8 +100,9 @@ calc_ord_mnpr <- function(pred.ord, bloomThresh) {
 
 
 
-best_xgb <- function(df_train, max_depth=2:6, eta=seq(0.01, 2, by=0.01),
-                     nthread=1) {
+best_xgb <- function(df_train, max_depth=2:5, eta=seq(0.01, 2, by=0.01),
+                     nthread=1, folds=NULL) {
+  library(tidyverse); library(xgboost)
   xg_grid <- expand_grid(max_depth=max_depth, eta=eta) %>%
     mutate(LL_test=NA)
   for (j in 1:nrow(xg_grid)) {
@@ -113,6 +114,7 @@ best_xgb <- function(df_train, max_depth=2:6, eta=seq(0.01, 2, by=0.01),
       objective="binary:logistic",
       early_stopping_rounds=4,
       nfold=5,
+      folds=folds,
       max_depth=xg_grid$max_depth[j],
       eta=xg_grid$eta[j],
       verbose=F,
