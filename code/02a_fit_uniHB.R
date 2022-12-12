@@ -183,10 +183,12 @@ for(i in length(covariate_sets)) {
   s_p <- glue("p{covar_s}")
   
   # Prior strengths
+  # TODO: Try tighter until performance decrease
   pri.var <- switch(prior_strength,
                     "1"=list(hs1=0.5, hs2=0.6, b=0.75, de=0.3, i="1-loose"),
                     "2"=list(hs1=1, hs2=0.4, b=0.5, de=0.2, i="2-medium"),
-                    "3"=list(hs1=3, hs2=0.2, b=0.2, de=0.1, i="3-tight"))
+                    "3"=list(hs1=3, hs2=0.2, b=0.2, de=0.1, i="3-tight"),
+                    "4"=list(hs1=5, hs2=0.1, b=0.1, de=0.05, i="4-tighter")) 
   
   # Interaction priors
   if(i.name=="null") { 
