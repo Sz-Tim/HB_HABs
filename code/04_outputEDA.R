@@ -92,6 +92,26 @@ ggsave(glue("figs/R2_McFadden_{prior_type}.png"), p, width=10, height=5, units="
 
 p <- outMn.df %>%
   group_by(species, dataSubset, model, modType) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T))) %>%
+  group_by(species, dataSubset) %>%
+  arrange(species, model) %>%
+  mutate(R2=1 - LL/first(LL)) %>%
+  arrange(desc(R2)) %>% 
+  filter(modType != "Ensemble") %>%
+  mutate(R2_rank=row_number()) %>%
+  ggplot(aes(modType, R2_rank, colour=modType, group=modType)) +
+  geom_hline(yintercept=0, colour="grey30", size=0.25) +
+  geom_point() + geom_rug(sides="l") +
+  facet_grid(dataSubset~species) + 
+  scale_colour_manual("Model type", values=modType_cols) +
+  labs(x="Model", y=expression("McFadden's pseudo-R"^2)) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
+        panel.grid.minor.y=element_blank(),
+        legend.position="bottom")
+ggsave(glue("figs/R2_ranks_McFadden_{prior_type}.png"), p, width=10, height=5, units="in")
+
+p <- outMn.df %>%
+  group_by(species, dataSubset, model, modType) %>%
   summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T)),
             N=n()) %>%
   group_by(species, dataSubset) %>%
@@ -103,11 +123,32 @@ p <- outMn.df %>%
   facet_grid(dataSubset~species) + 
   scale_y_continuous(limits=c(0, 0.6), breaks=c(0, 0.2, 0.4, 0.6)) +
   scale_colour_manual("Model type", values=modType_cols) +
-  labs(x="Model", y=expression("Nagelkerkes's pseudo-R"^2)) +
+  labs(x="Model", y=expression("Nagelkerke's pseudo-R"^2)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
 ggsave(glue("figs/R2_Nagelkerke_{prior_type}.png"), p, width=10, height=5, units="in")
+
+p <- outMn.df %>%
+  group_by(species, dataSubset, model, modType) %>%
+  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T)),
+            N=n()) %>%
+  group_by(species, dataSubset) %>%
+  arrange(species, model) %>%
+  mutate(R2=(1 - exp((LL - first(LL))/N))/(1 - exp(-first(LL)/N))) %>%
+  arrange(desc(R2)) %>% 
+  filter(modType != "Ensemble") %>%
+  mutate(R2_rank=row_number()) %>%
+  ggplot(aes(modType, R2_rank, colour=modType, group=modType)) +
+  geom_hline(yintercept=0, colour="grey30", size=0.25) +
+  geom_point() + geom_rug(sides="l") +
+  facet_grid(dataSubset~species) + 
+  scale_colour_manual("Model type", values=modType_cols) +
+  labs(x="Model", y=expression("Nagelkerke's pseudo-R"^2)) +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
+        panel.grid.minor.y=element_blank(),
+        legend.position="bottom")
+ggsave(glue("figs/R2_ranks_Nagelkerke_{prior_type}.png"), p, width=10, height=5, units="in")
 
 
 
