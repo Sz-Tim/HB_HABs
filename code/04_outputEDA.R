@@ -557,10 +557,13 @@ ggsave(glue("figs/effects_bernP11_{prior_type}.png"), p, width=9, height=9)
 
 out.p <- dir(out.dir, "ord_all_", full.names=T) %>%
   map(readRDS) %>% setNames(sp.i$full)
+p.nonZero <- out.p %>% map(~fixef(.x, probs=c(0.25, 0.75)) %>% 
+                             as_tibble(rownames="par") %>%
+                             filter(!grepl("Intercept", par) & sign(Q25) == sign(Q75)))
 
 pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
 for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects,
+  pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
                                                  x_var_temp=seq(-2, 2, 1)) %>%
@@ -592,47 +595,13 @@ p <- ggplot(pred.ord, aes(date, pred, colour=x_var, group=paste(x_var, siteid)))
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
 ggsave(glue("figs/effects_ord_{prior_type}.png"), p, width=28, height=8)
-
-
-
-# * bern11 ---------------------------------------------------------------
-
-out.p <- dir(out.dir, "bern11_all_", full.names=T) %>%
-  map(readRDS) %>% setNames(sp.i$full)
-
-pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
-for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects,
-                          ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                                 siteid=site_sample,
-                                                 x_var_temp=seq(-2, 2, 1)) %>%
-                                       mutate(x_var=x_var_temp) %>%
-                                       setNames(c("yday", "siteid", .x, "x_var")) %>%
-                                       mutate(ydayCos=cos(yday*2*pi/365),
-                                              ydaySin=sin(yday*2*pi/365),
-                                              ydaySC=ydayCos*ydaySin,
-                                              date=as_date(yday, origin="2019-01-01")),
-                                     map_dfr(grep(glue("^{.x}$"), p.effects, value=T, invert=T),
-                                             ~tibble(var=.x, val=0)) %>%
-                                       pivot_wider(names_from="var", values_from="val")) %>%
-                            mutate(pred=colMeans(posterior_epred(out.p[[i]], newdata=.,
-                                                                 allow_new_levels=T)),
-                                   var=.x,
-                                   species=sp.i$full[i]))
-}
-pred.bern11 <- do.call(rbind, pred.ls) %>%
-  rename_all(~str_remove(.x, "wk")) %>%
-  rename_all(~str_replace(.x, "L", "_L")) %>%
-  rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.bern11, glue("out/effects_bern11_{prior_type}.rds"))
-p <- ggplot(pred.bern11, aes(date, pred, colour=x_var, group=paste(x_var, siteid))) + 
-  geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_grid(species~var) +
+p <- ggplot(pred.ord, aes(date, x_var, colour=pred)) + 
+  geom_jitter(alpha=0.25, width=0, height=0.5) + facet_grid(species~var) +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   scale_colour_viridis_c() +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave(glue("figs/effects_bern11_{prior_type}.png"), p, width=28, height=8)
+ggsave(glue("figs/effects_pts_ord_{prior_type}.png"), p, width=28, height=8)
 
 
 
@@ -640,10 +609,13 @@ ggsave(glue("figs/effects_bern11_{prior_type}.png"), p, width=28, height=8)
 
 out.p <- dir(out.dir, "bern01_all_", full.names=T) %>%
   map(readRDS) %>% setNames(sp.i$full)
+p.nonZero <- out.p %>% map(~fixef(.x, probs=c(0.25, 0.75)) %>% 
+                             as_tibble(rownames="par") %>%
+                             filter(!grepl("Intercept", par) & sign(Q25) == sign(Q75)))
 
 pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
 for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects,
+  pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
                                                  x_var_temp=seq(-2, 2, 1)) %>%
@@ -674,6 +646,65 @@ p <- ggplot(pred.bern01, aes(date, pred, colour=x_var, group=paste(x_var, siteid
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
 ggsave(glue("figs/effects_bern01_{prior_type}.png"), p, width=28, height=8)
+p <- ggplot(pred.ord, aes(date, x_var, colour=pred)) + 
+  geom_jitter(alpha=0.25, width=0, height=0.5) + facet_grid(species~var) +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
+  scale_colour_viridis_c() +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid.minor=element_blank(), legend.position="bottom")
+ggsave(glue("figs/effects_pts_bern01_{prior_type}.png"), p, width=28, height=8)
+
+
+
+
+# * bern11 ---------------------------------------------------------------
+
+out.p <- dir(out.dir, "bern11_all_", full.names=T) %>%
+  map(readRDS) %>% setNames(sp.i$full)
+p.nonZero <- out.p %>% map(~fixef(.x, probs=c(0.25, 0.75)) %>% 
+                             as_tibble(rownames="par") %>%
+                             filter(!grepl("Intercept", par) & sign(Q25) == sign(Q75)))
+
+pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
+for(i in seq_along(pred.ls)) {
+  pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
+                          ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
+                                                 siteid=site_sample,
+                                                 x_var_temp=seq(-2, 2, 1)) %>%
+                                       mutate(x_var=x_var_temp) %>%
+                                       setNames(c("yday", "siteid", .x, "x_var")) %>%
+                                       mutate(ydayCos=cos(yday*2*pi/365),
+                                              ydaySin=sin(yday*2*pi/365),
+                                              ydaySC=ydayCos*ydaySin,
+                                              date=as_date(yday, origin="2019-01-01")),
+                                     map_dfr(grep(glue("^{.x}$"), p.effects, value=T, invert=T),
+                                             ~tibble(var=.x, val=0)) %>%
+                                       pivot_wider(names_from="var", values_from="val")) %>%
+                            mutate(pred=colMeans(posterior_epred(out.p[[i]], newdata=.,
+                                                                 allow_new_levels=T)),
+                                   var=.x,
+                                   species=sp.i$full[i]))
+}
+pred.bern11 <- do.call(rbind, pred.ls) %>%
+  rename_all(~str_remove(.x, "wk")) %>%
+  rename_all(~str_replace(.x, "L", "_L")) %>%
+  rename_all(~str_replace(.x, "R", "_R"))
+saveRDS(pred.bern11, glue("out/effects_bern11_{prior_type}.rds"))
+p <- ggplot(pred.bern11, aes(date, pred, colour=x_var, group=paste(x_var, siteid))) + 
+  geom_hline(yintercept=0, colour="grey30", linetype=2) +
+  geom_line(alpha=0.25) + facet_grid(species~var) +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
+  scale_colour_viridis_c() +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid.minor=element_blank(), legend.position="bottom")
+ggsave(glue("figs/effects_bern11_{prior_type}.png"), p, width=28, height=8)
+p <- ggplot(pred.ord, aes(date, x_var, colour=pred)) + 
+  geom_jitter(alpha=0.25, width=0, height=0.5) + facet_grid(species~var) +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
+  scale_colour_viridis_c() +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid.minor=element_blank(), legend.position="bottom")
+ggsave(glue("figs/effects_pts_bern11_{prior_type}.png"), p, width=28, height=8)
 
 
 
