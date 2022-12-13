@@ -570,7 +570,7 @@ for(i in seq_along(pred.ls)) {
                                               ydaySin=sin(yday*2*pi/365),
                                               ydaySC=ydayCos*ydaySin,
                                               date=as_date(yday, origin="2019-01-01")),
-                                     map_dfr(grep(.x, p.effects, value=T, invert=T),
+                                     map_dfr(grep(glue("^{.x}$"), p.effects, value=T, invert=T),
                                              ~tibble(var=.x, val=0)) %>%
                                        pivot_wider(names_from="var", values_from="val")) %>%
                             mutate(pred=calc_ord_mnpr(posterior_epred(out.p[[i]], newdata=.,
@@ -612,7 +612,7 @@ for(i in seq_along(pred.ls)) {
                                               ydaySin=sin(yday*2*pi/365),
                                               ydaySC=ydayCos*ydaySin,
                                               date=as_date(yday, origin="2019-01-01")),
-                                     map_dfr(grep(.x, p.effects, value=T, invert=T),
+                                     map_dfr(grep(glue("^{.x}$"), p.effects, value=T, invert=T),
                                              ~tibble(var=.x, val=0)) %>%
                                        pivot_wider(names_from="var", values_from="val")) %>%
                             mutate(pred=colMeans(posterior_epred(out.p[[i]], newdata=.,
@@ -653,7 +653,7 @@ for(i in seq_along(pred.ls)) {
                                               ydaySin=sin(yday*2*pi/365),
                                               ydaySC=ydayCos*ydaySin,
                                               date=as_date(yday, origin="2019-01-01")),
-                                     map_dfr(grep(.x, p.effects, value=T, invert=T),
+                                     map_dfr(grep(glue("^{.x}$"), p.effects, value=T, invert=T),
                                              ~tibble(var=.x, val=0)) %>%
                                        pivot_wider(names_from="var", values_from="val")) %>%
                             mutate(pred=colMeans(posterior_epred(out.p[[i]], newdata=.,
