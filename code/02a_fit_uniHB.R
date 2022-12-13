@@ -258,7 +258,7 @@ for(i in length(covariate_sets)) {
     full_join(hydro.df) %>%
     full_join(connect.df) %>%
     full_join(cprn.df) %>%
-    mutate(across(contains("Dir_"), ~cos(.x-openBearing))) %>% # -1 = toward open ocean, 1 = in from open ocean
+    mutate(across(contains("Dir_"), ~cos(.x-openBearing))) %>% # 1 = toward open ocean, -1 = in from open ocean
     mutate(ydaySC=ydaySin*ydayCos,
            windVel=wind_L_wk*windDir_L_wk,
            waterVelL=water_L_wk*waterDir_L_wk,
