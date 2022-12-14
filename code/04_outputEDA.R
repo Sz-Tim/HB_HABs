@@ -99,16 +99,20 @@ p <- outMn.df %>%
   arrange(desc(R2)) %>% 
   filter(modType != "Ensemble") %>%
   mutate(R2_rank=row_number()) %>%
-  ggplot(aes(modType, R2_rank, colour=modType, group=modType)) +
+  mutate(modCat=case_when(modType=="Null" ~ "Null",
+                          modType=="GLM" ~ "Reg. GLM",
+                          grepl("Bayes", modType) ~ "Bayes",
+                          grepl("ML", modType) ~ "ML")) %>%
+  filter(!is.na(R2)) %>%
+  ggplot(aes(species, R2_rank, fill=modCat)) +
   geom_hline(yintercept=0, colour="grey30", size=0.25) +
-  geom_point() + geom_rug(sides="l") +
-  facet_grid(dataSubset~species) + 
-  scale_colour_manual("Model type", values=modType_cols) +
-  labs(x="Model", y=expression("McFadden's pseudo-R"^2)) +
+  geom_point(shape=22, size=3, colour="grey30") + 
+  facet_grid(dataSubset~.) + 
+  scale_fill_manual("Model type", values=c("#1b9e77", "#d95f02", "grey30", "#e6ab02")) +
+  labs(x="", y=expression("Ranked McFadden's pseudo-R"^2)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
-        panel.grid.minor.y=element_blank(),
-        legend.position="bottom")
-ggsave(glue("figs/R2_ranks_McFadden_{prior_type}.png"), p, width=10, height=5, units="in")
+        panel.grid.minor.y=element_blank())
+ggsave(glue("figs/R2_ranks_McFadden_{prior_type}.png"), p, width=3, height=6, units="in")
 
 p <- outMn.df %>%
   group_by(species, dataSubset, model, modType) %>%
@@ -139,16 +143,20 @@ p <- outMn.df %>%
   arrange(desc(R2)) %>% 
   filter(modType != "Ensemble") %>%
   mutate(R2_rank=row_number()) %>%
-  ggplot(aes(modType, R2_rank, colour=modType, group=modType)) +
+  mutate(modCat=case_when(modType=="Null" ~ "Null",
+                          modType=="GLM" ~ "Reg. GLM",
+                          grepl("Bayes", modType) ~ "Bayes",
+                          grepl("ML", modType) ~ "ML")) %>%
+  filter(!is.na(R2)) %>%
+  ggplot(aes(species, R2_rank, fill=modCat)) +
   geom_hline(yintercept=0, colour="grey30", size=0.25) +
-  geom_point() + geom_rug(sides="l") +
-  facet_grid(dataSubset~species) + 
-  scale_colour_manual("Model type", values=modType_cols) +
-  labs(x="Model", y=expression("Nagelkerke's pseudo-R"^2)) +
+  geom_point(shape=22, size=3, colour="grey30") + 
+  facet_grid(dataSubset~.) + 
+  scale_fill_manual("Model type", values=c("#1b9e77", "#d95f02", "grey30", "#e6ab02")) +
+  labs(x="", y=expression("Ranked Nagelkerke's pseudo-R"^2)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
-        panel.grid.minor.y=element_blank(),
-        legend.position="bottom")
-ggsave(glue("figs/R2_ranks_Nagelkerke_{prior_type}.png"), p, width=10, height=5, units="in")
+        panel.grid.minor.y=element_blank())
+ggsave(glue("figs/R2_ranks_Nagelkerke_{prior_type}.png"), p, width=3, height=6, units="in")
 
 
 
