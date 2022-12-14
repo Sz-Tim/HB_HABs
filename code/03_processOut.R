@@ -16,7 +16,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-prior_type <- c("1-loose", "2-medium", "3-tight")[2]
+prior_type <- c("1-loose", "2-medium", "3-tight", "4-tighter")[4]
 out.dir <- glue("out/{prior_type}/")
 
 sp.i <- read_csv("data/sp_i.csv")
