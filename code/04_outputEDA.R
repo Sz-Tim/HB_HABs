@@ -654,7 +654,7 @@ p <- ggplot(pred.bern01, aes(date, pred, colour=x_var, group=paste(x_var, siteid
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
 ggsave(glue("figs/effects_bern01_{prior_type}.png"), p, width=28, height=8)
-p <- ggplot(pred.ord, aes(date, x_var, colour=pred)) + 
+p <- ggplot(pred.bern01, aes(date, x_var, colour=pred)) + 
   geom_jitter(alpha=0.25, width=0, height=0.5) + facet_grid(species~var) +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   scale_colour_viridis_c() +
@@ -706,7 +706,7 @@ p <- ggplot(pred.bern11, aes(date, pred, colour=x_var, group=paste(x_var, siteid
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
 ggsave(glue("figs/effects_bern11_{prior_type}.png"), p, width=28, height=8)
-p <- ggplot(pred.ord, aes(date, x_var, colour=pred)) + 
+p <- ggplot(pred.bern11, aes(date, x_var, colour=pred)) + 
   geom_jitter(alpha=0.25, width=0, height=0.5) + facet_grid(species~var) +
   scale_x_date(date_labels="%b", date_breaks="2 months") +
   scale_colour_viridis_c() +
@@ -716,4 +716,7 @@ ggsave(glue("figs/effects_pts_bern11_{prior_type}.png"), p, width=28, height=8)
 
 
 
+
+
+# variable importance -----------------------------------------------------
 
