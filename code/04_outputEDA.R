@@ -396,7 +396,7 @@ p <- ggplot(auc.df, aes(model, AUC, colour=modType, shape=prior)) +
   geom_point() +
   facet_grid(type~species) + 
   scale_colour_manual(values=modType_cols) + 
-  scale_shape_manual(values=c("1", "2", "3")) +
+  scale_shape_manual(values=c("1", "2", "3", "4")) +
   scale_y_continuous(limits=c(0.45, 1), breaks=c(0.5, 0.7, 0.8, 0.9, 1)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5),
         axis.title.x=element_blank(),
@@ -427,156 +427,6 @@ p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk',
                'chlwkdt', 'o2wkdt', 'phwkdt', 'po4wkdt',
                'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
 if(prior_type=="full") p.effects <- c(p.effects, 'Nbloom1', "Nbloom2")
-
-
-
-# * ordP ------------------------------------------------------------------
-
-out.p <- dir(out.dir, "ordP_all_", full.names=T) %>%
-  map(readRDS) %>% setNames(sp.i$full)
-
-smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                    siteid=site_sample) %>%
-                          mutate(ydayCos=cos(yday*2*pi/365),
-                                 ydaySin=sin(yday*2*pi/365),
-                                 ydaySC=ydayCos*ydaySin,
-                                 date=as_date(yday, origin="2019-01-01")),
-                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
-                          pivot_wider(names_from="var", values_from="val"))
-pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
-for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects, 
-                          ~smooths.df %>%
-                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                                  allow_new_levels=T,
-                                                                  nlpar=paste0("b", .x))),
-                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                              allow_new_levels=T,
-                                                              nlpar=paste0("p", .x))),
-                                   var=.x,
-                                   species=sp.i$full[i])) %>%
-    bind_rows(smooths.df %>%
-                mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=.,
-                                                      allow_new_levels=T,
-                                                      nlpar="bIntercept")),
-                       p=1,
-                       var="Intercept",
-                       species=sp.i$full[i]))
-}
-pred.ordP <- do.call(rbind, pred.ls) %>%
-  rename_all(~str_remove(.x, "wk")) %>%
-  rename_all(~str_replace(.x, "L", "_L")) %>%
-  rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.ordP, glue("out/effects_ordP_{prior_type}.rds"))
-p <- ggplot(pred.ordP, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
-  geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
-  scale_colour_brewer(type="qual", palette="Dark2") +
-  scale_x_date(date_labels="%b", date_breaks="2 months") +
-  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
-  theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave(glue("figs/effects_ordP_{prior_type}.png"), p, width=9, height=9)
-
-
-
-# * bernP01 ---------------------------------------------------------------
-
-out.p <- dir(out.dir, "bernP01_all_", full.names=T) %>%
-  map(readRDS) %>% setNames(sp.i$full)
-
-smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                    siteid=site_sample) %>%
-                          mutate(ydayCos=cos(yday*2*pi/365),
-                                 ydaySin=sin(yday*2*pi/365),
-                                 ydaySC=ydayCos*ydaySin,
-                                 date=as_date(yday, origin="2019-01-01")),
-                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
-                          pivot_wider(names_from="var", values_from="val"))
-pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
-for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects, 
-                          ~smooths.df %>%
-                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                                  allow_new_levels=T,
-                                                                  nlpar=paste0("b", .x))),
-                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                              allow_new_levels=T,
-                                                              nlpar=paste0("p", .x))),
-                                   var=.x,
-                                   species=sp.i$full[i])) %>%
-    bind_rows(smooths.df %>%
-                mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=.,
-                                                      allow_new_levels=T,
-                                                      nlpar="bIntercept")),
-                       p=1,
-                       var="Intercept",
-                       species=sp.i$full[i]))
-}
-pred.bernP01 <- do.call(rbind, pred.ls) %>%
-  rename_all(~str_remove(.x, "wk")) %>%
-  rename_all(~str_replace(.x, "L", "_L")) %>%
-  rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.bernP01, glue("out/effects_bernP01_{prior_type}.rds"))
-p <- ggplot(pred.bernP01, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
-  geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
-  scale_colour_brewer(type="qual", palette="Dark2") +
-  scale_x_date(date_labels="%b", date_breaks="2 months") +
-  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
-  theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave(glue("figs/effects_bernP01_{prior_type}.png"), p, width=9, height=9)
-
-
-
-# * bernP11 ---------------------------------------------------------------
-
-out.p <- dir(out.dir, "bernP11_all_", full.names=T) %>%
-  map(readRDS) %>% setNames(sp.i$full)
-
-smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
-                                    siteid=site_sample) %>%
-                          mutate(ydayCos=cos(yday*2*pi/365),
-                                 ydaySin=sin(yday*2*pi/365),
-                                 ydaySC=ydayCos*ydaySin,
-                                 date=as_date(yday, origin="2019-01-01")),
-                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
-                          pivot_wider(names_from="var", values_from="val"))
-pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
-for(i in seq_along(pred.ls)) {
-  pred.ls[[i]] <- map_dfr(p.effects, 
-                          ~smooths.df %>%
-                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                                  allow_new_levels=T,
-                                                                  nlpar=paste0("b", .x))),
-                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
-                                                              allow_new_levels=T,
-                                                              nlpar=paste0("p", .x))),
-                                   var=.x,
-                                   species=sp.i$full[i])) %>%
-    bind_rows(smooths.df %>%
-                mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=.,
-                                                      allow_new_levels=T,
-                                                      nlpar="bIntercept")),
-                       p=1,
-                       var="Intercept",
-                       species=sp.i$full[i]))
-}
-pred.bernP11 <- do.call(rbind, pred.ls) %>%
-  rename_all(~str_remove(.x, "wk")) %>%
-  rename_all(~str_replace(.x, "L", "_L")) %>%
-  rename_all(~str_replace(.x, "R", "_R"))
-saveRDS(pred.bernP11, glue("out/effects_bernP11_{prior_type}.rds"))
-p <- ggplot(pred.bernP11, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
-  geom_hline(yintercept=0, colour="grey30", linetype=2) +
-  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
-  scale_colour_brewer(type="qual", palette="Dark2") +
-  scale_x_date(date_labels="%b", date_breaks="2 months") +
-  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
-  theme(panel.grid.minor=element_blank(), legend.position="bottom")
-ggsave(glue("figs/effects_bernP11_{prior_type}.png"), p, width=9, height=9)
-
-
-
 
 
 
@@ -732,6 +582,158 @@ p <- ggplot(pred.bern11, aes(date, x_var, colour=pred)) +
   guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
   theme(panel.grid.minor=element_blank(), legend.position="bottom")
 ggsave(glue("figs/effects_pts_bern11_{prior_type}.png"), p, width=28, height=8)
+
+
+
+
+
+# * ordP ------------------------------------------------------------------
+
+out.p <- dir(out.dir, "ordP_all_", full.names=T) %>%
+  map(readRDS) %>% setNames(sp.i$full)
+
+smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
+                                    siteid=site_sample) %>%
+                          mutate(ydayCos=cos(yday*2*pi/365),
+                                 ydaySin=sin(yday*2*pi/365),
+                                 ydaySC=ydayCos*ydaySin,
+                                 date=as_date(yday, origin="2019-01-01")),
+                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
+                          pivot_wider(names_from="var", values_from="val"))
+pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
+for(i in seq_along(pred.ls)) {
+  pred.ls[[i]] <- map_dfr(p.effects, 
+                          ~smooths.df %>%
+                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                  allow_new_levels=T,
+                                                                  nlpar=paste0("b", .x))),
+                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                              allow_new_levels=T,
+                                                              nlpar=paste0("p", .x))),
+                                   var=.x,
+                                   species=sp.i$full[i])) %>%
+    bind_rows(smooths.df %>%
+                mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=.,
+                                                      allow_new_levels=T,
+                                                      nlpar="bIntercept")),
+                       p=1,
+                       var="Intercept",
+                       species=sp.i$full[i]))
+}
+pred.ordP <- do.call(rbind, pred.ls) %>%
+  rename_all(~str_remove(.x, "wk")) %>%
+  rename_all(~str_replace(.x, "L", "_L")) %>%
+  rename_all(~str_replace(.x, "R", "_R"))
+saveRDS(pred.ordP, glue("out/effects_ordP_{prior_type}.rds"))
+p <- ggplot(pred.ordP, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
+  geom_hline(yintercept=0, colour="grey30", linetype=2) +
+  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
+  scale_colour_brewer(type="qual", palette="Dark2") +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid.minor=element_blank(), legend.position="bottom")
+ggsave(glue("figs/effects_ordP_{prior_type}.png"), p, width=9, height=9)
+
+
+
+# * bernP01 ---------------------------------------------------------------
+
+out.p <- dir(out.dir, "bernP01_all_", full.names=T) %>%
+  map(readRDS) %>% setNames(sp.i$full)
+
+smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
+                                    siteid=site_sample) %>%
+                          mutate(ydayCos=cos(yday*2*pi/365),
+                                 ydaySin=sin(yday*2*pi/365),
+                                 ydaySC=ydayCos*ydaySin,
+                                 date=as_date(yday, origin="2019-01-01")),
+                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
+                          pivot_wider(names_from="var", values_from="val"))
+pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
+for(i in seq_along(pred.ls)) {
+  pred.ls[[i]] <- map_dfr(p.effects, 
+                          ~smooths.df %>%
+                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                  allow_new_levels=T,
+                                                                  nlpar=paste0("b", .x))),
+                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                              allow_new_levels=T,
+                                                              nlpar=paste0("p", .x))),
+                                   var=.x,
+                                   species=sp.i$full[i])) %>%
+    bind_rows(smooths.df %>%
+                mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=.,
+                                                      allow_new_levels=T,
+                                                      nlpar="bIntercept")),
+                       p=1,
+                       var="Intercept",
+                       species=sp.i$full[i]))
+}
+pred.bernP01 <- do.call(rbind, pred.ls) %>%
+  rename_all(~str_remove(.x, "wk")) %>%
+  rename_all(~str_replace(.x, "L", "_L")) %>%
+  rename_all(~str_replace(.x, "R", "_R"))
+saveRDS(pred.bernP01, glue("out/effects_bernP01_{prior_type}.rds"))
+p <- ggplot(pred.bernP01, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
+  geom_hline(yintercept=0, colour="grey30", linetype=2) +
+  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
+  scale_colour_brewer(type="qual", palette="Dark2") +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid.minor=element_blank(), legend.position="bottom")
+ggsave(glue("figs/effects_bernP01_{prior_type}.png"), p, width=9, height=9)
+
+
+
+# * bernP11 ---------------------------------------------------------------
+
+out.p <- dir(out.dir, "bernP11_all_", full.names=T) %>%
+  map(readRDS) %>% setNames(sp.i$full)
+
+smooths.df <- bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
+                                    siteid=site_sample) %>%
+                          mutate(ydayCos=cos(yday*2*pi/365),
+                                 ydaySin=sin(yday*2*pi/365),
+                                 ydaySC=ydayCos*ydaySin,
+                                 date=as_date(yday, origin="2019-01-01")),
+                        map_dfr(p.effects, ~tibble(var=.x, val=0)) %>%
+                          pivot_wider(names_from="var", values_from="val"))
+pred.ls <- vector("list", nrow(sp.i)) %>% setNames(sp.i$full)
+for(i in seq_along(pred.ls)) {
+  pred.ls[[i]] <- map_dfr(p.effects, 
+                          ~smooths.df %>%
+                            mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                                  allow_new_levels=T,
+                                                                  nlpar=paste0("b", .x))),
+                                   p=colMeans(posterior_epred(out.p[[i]], newdata=., 
+                                                              allow_new_levels=T,
+                                                              nlpar=paste0("p", .x))),
+                                   var=.x,
+                                   species=sp.i$full[i])) %>%
+    bind_rows(smooths.df %>%
+                mutate(slope=colMeans(posterior_epred(out.p[[i]], newdata=.,
+                                                      allow_new_levels=T,
+                                                      nlpar="bIntercept")),
+                       p=1,
+                       var="Intercept",
+                       species=sp.i$full[i]))
+}
+pred.bernP11 <- do.call(rbind, pred.ls) %>%
+  rename_all(~str_remove(.x, "wk")) %>%
+  rename_all(~str_replace(.x, "L", "_L")) %>%
+  rename_all(~str_replace(.x, "R", "_R"))
+saveRDS(pred.bernP11, glue("out/effects_bernP11_{prior_type}.rds"))
+p <- ggplot(pred.bernP11, aes(date, slope*p, colour=species, group=paste(species, siteid))) + 
+  geom_hline(yintercept=0, colour="grey30", linetype=2) +
+  geom_line(alpha=0.25) + facet_wrap(~var, ncol=5) +
+  scale_colour_brewer(type="qual", palette="Dark2") +
+  scale_x_date(date_labels="%b", date_breaks="2 months") +
+  guides(colour=guide_legend(override.aes=list(alpha=1, size=1))) +
+  theme(panel.grid.minor=element_blank(), legend.position="bottom")
+ggsave(glue("figs/effects_bernP11_{prior_type}.png"), p, width=9, height=9)
+
+
+
 
 
 
