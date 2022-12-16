@@ -32,7 +32,7 @@ bloomThresh <- dir(out.dir, "dataset.*csv", full.names=T) %>%
 # colours, etc ------------------------------------------------------------
 
 mod_cols <- c(grand="black", fourWk="grey40", 
-              glmRidge="grey60", glmRidge_split="grey60", glmLasso="grey80", glmLasso_split="grey80",
+              glmElast="grey60", glmElast_split="grey60", 
               bern="dodgerblue", bernP="dodgerblue", 
               ord="cadetblue", ordP="cadetblue", 
               rf="green4", rf_split="green3",
@@ -41,7 +41,7 @@ mod_cols <- c(grand="black", fourWk="grey40",
               avg="purple", avgHB="purple2", avgMo="purple3", avgB1="purple4")
 mod.i <- tibble(mod_col=names(mod_cols),
                 mod_clean=c("Grand mean", "4-week mean", 
-                            paste0("GLM-", 1:4),
+                            paste0("GLM-", 1:2),
                             paste0("Logistic-", 1:2),
                             paste0("Ordinal-", 1:2),
                             "RF-1", "RF-2",
@@ -49,7 +49,7 @@ mod.i <- tibble(mod_col=names(mod_cols),
                             "XGB-1", "XGB-2",
                             paste0("Ensemble-", c("Tot", "Bayes", "Month", "Bloom"))),
                 mod_short=c("Mean", "4-wk", 
-                            "GLM-1", "GLM-2", "GLM-3", "GLM-4",
+                            "GLM-1", "GLM-2", 
                             "L-1", "L-2", 
                             "O-1", "O-2", 
                             "RF-1", "RF-2", 
@@ -100,15 +100,15 @@ p <- outMn.df %>%
   filter(modType != "Ensemble") %>%
   mutate(R2_rank=row_number()) %>%
   mutate(modCat=case_when(modType=="Null" ~ "Null",
-                          modType=="GLM" ~ "Reg. GLM",
+                          modType=="GLM" ~ "ElasticNet",
                           grepl("Bayes", modType) ~ "Bayes",
                           grepl("ML", modType) ~ "ML")) %>%
   filter(!is.na(R2)) %>%
   ggplot(aes(species, R2_rank, fill=modCat)) +
-  geom_hline(yintercept=0, colour="grey30", size=0.25) +
-  geom_point(shape=22, size=3, colour="grey30") + 
+  # geom_point(shape=22, size=4, colour="grey30") + 
+  geom_tile(colour="grey30") +
   facet_grid(dataSubset~.) + 
-  scale_fill_manual("Model type", values=c("#1b9e77", "#d95f02", "grey30", "#e6ab02")) +
+  scale_fill_manual("Model type", values=c("#1b9e77", "#e6ab02", "#d95f02", "grey30")) +
   labs(x="", y=expression("Ranked McFadden's pseudo-R"^2)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank())
@@ -132,31 +132,6 @@ p <- outMn.df %>%
         panel.grid.minor.y=element_blank(),
         legend.position="bottom")
 ggsave(glue("figs/R2_Nagelkerke_{prior_type}.png"), p, width=10, height=5, units="in")
-
-p <- outMn.df %>%
-  group_by(species, dataSubset, model, modType) %>%
-  summarise(LL=sum(dbinom(Nbloom, 1, pred, log=T)),
-            N=n()) %>%
-  group_by(species, dataSubset) %>%
-  arrange(species, model) %>%
-  mutate(R2=(1 - exp((LL - first(LL))/N))/(1 - exp(-first(LL)/N))) %>%
-  arrange(desc(R2)) %>% 
-  filter(modType != "Ensemble") %>%
-  mutate(R2_rank=row_number()) %>%
-  mutate(modCat=case_when(modType=="Null" ~ "Null",
-                          modType=="GLM" ~ "Reg. GLM",
-                          grepl("Bayes", modType) ~ "Bayes",
-                          grepl("ML", modType) ~ "ML")) %>%
-  filter(!is.na(R2)) %>%
-  ggplot(aes(species, R2_rank, fill=modCat)) +
-  geom_hline(yintercept=0, colour="grey30", size=0.25) +
-  geom_point(shape=22, size=3, colour="grey30") + 
-  facet_grid(dataSubset~.) + 
-  scale_fill_manual("Model type", values=c("#1b9e77", "#d95f02", "grey30", "#e6ab02")) +
-  labs(x="", y=expression("Ranked Nagelkerke's pseudo-R"^2)) +
-  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
-        panel.grid.minor.y=element_blank())
-ggsave(glue("figs/R2_ranks_Nagelkerke_{prior_type}.png"), p, width=3, height=6, units="in")
 
 
 
