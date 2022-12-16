@@ -9,7 +9,7 @@
 
 # set up ------------------------------------------------------------------
 
-pkgs <- c("tidyverse", "lubridate", "glue", "lme4", "glmnet")
+pkgs <- c("tidyverse", "lubridate", "glue", "glmnet", "caret")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
@@ -94,57 +94,34 @@ for(i in length(covariate_sets)) {
     
     # Full fit for predictions
     train.df_ <- train.df %>% 
-      mutate(lonlat=lon_sc*lat_sc) %>%
+      mutate(lonlat=lon_sc*lat_sc,
+             Nbloom=factor(Nbloom, labels=c("X0", "X1"))) %>%
       select(Nbloom, all_of(covar_int), lonlat, Nbloom1)
     train.df01 <- train.df_ %>% filter(Nbloom1==0)
     train.df11 <- train.df_ %>% filter(Nbloom1==1)
     
-    cv.ridge <- cv.glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                          family="binomial", alpha=0)
-    out.ridge <- glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                        family="binomial", alpha=0, lambda=cv.ridge$lambda.min)
-    cv.ridge01 <- cv.glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                            family="binomial", alpha=0)
-    out.ridge01 <- glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                          family="binomial", alpha=0, lambda=cv.ridge01$lambda.min)
-    cv.ridge11 <- cv.glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                            family="binomial", alpha=0)
-    out.ridge11 <- glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                          family="binomial", alpha=0, lambda=cv.ridge11$lambda.min)
+    elast.ctrl <- trainControl("repeatedcv", number=6, repeats=3, classProbs=T)
+    elast.grid <- expand.grid(alpha=seq(0, 1, length.out=26),
+                              lambda=2^(seq(-15,-1,length.out=25)))
+    elast_ <- train(Nbloom~., data=train.df_, 
+                    method="glmnet", trControl=elast.ctrl, tuneGrid=elast.grid)
+    elast01 <- train(Nbloom~., data=train.df01, 
+                     method="glmnet", trControl=elast.ctrl, tuneGrid=elast.grid)
+    elast11 <- train(Nbloom~., data=train.df11, 
+                     method="glmnet", trControl=elast.ctrl, tuneGrid=elast.grid)
     
-    saveRDS(out.ridge, glue("{f.prefix}glmRidge_{f.suffix}.rds"))
-    saveRDS(out.ridge01, glue("{f.prefix}glmRidge01_{f.suffix}.rds"))
-    saveRDS(out.ridge11, glue("{f.prefix}glmRidge11_{f.suffix}.rds"))
-    
-    cv.lasso <- cv.glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                          family="binomial", alpha=1)
-    out.lasso <- glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                        family="binomial", alpha=1, lambda=cv.lasso$lambda.min)
-    cv.lasso01 <- cv.glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                          family="binomial", alpha=1)
-    out.lasso01 <- glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                        family="binomial", alpha=1, lambda=cv.lasso01$lambda.min)
-    cv.lasso11 <- cv.glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                            family="binomial", alpha=1)
-    out.lasso11 <- glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                          family="binomial", alpha=1, lambda=cv.lasso11$lambda.min)
-    
-    saveRDS(out.lasso, glue("{f.prefix}glmLasso_{f.suffix}.rds"))
-    saveRDS(out.lasso01, glue("{f.prefix}glmLasso01_{f.suffix}.rds"))
-    saveRDS(out.lasso11, glue("{f.prefix}glmLasso11_{f.suffix}.rds"))
+    saveRDS(elast_, glue("{f.prefix}glmElast_{f.suffix}.rds"))
+    saveRDS(elast01, glue("{f.prefix}glmElast01_{f.suffix}.rds"))
+    saveRDS(elast11, glue("{f.prefix}glmElast11_{f.suffix}.rds"))
     
     # Fitted
     fit.df <- full_join(
       train.df %>%
-        mutate(glmRidge_mnpr=predict(out.ridge, as.matrix(train.df_[,-1]), type="response")[,1],
-               glmLasso_mnpr=predict(out.lasso, as.matrix(train.df_[,-1]), type="response")[,1]),
+        mutate(glmElast_mnpr=predict(elast_, train.df_, type="prob")[,2]),
       tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
-             glmRidge_split_mnpr=c(
-               predict(out.ridge01, as.matrix(train.df01[,-1]), type="response")[,1],
-               predict(out.ridge11, as.matrix(train.df11[,-1]), type="response")[,1]),
-             glmLasso_split_mnpr=c(
-               predict(out.lasso01, as.matrix(train.df01[,-1]), type="response")[,1],
-               predict(out.lasso11, as.matrix(train.df11[,-1]), type="response")[,1]))
+             glmElast_split_mnpr=c(
+               predict(elast01, train.df01, type="prob")[,2],
+               predict(elast11, train.df11, type="prob")[,2]))
     ) %>%
       mutate(covarSet=i.name,
              species=target)
@@ -152,29 +129,24 @@ for(i in length(covariate_sets)) {
     
     # OOS predictions
     test.df_ <- test.df %>% 
-      mutate(lonlat=lon_sc*lat_sc) %>%
+      mutate(lonlat=lon_sc*lat_sc,
+             Nbloom=factor(Nbloom, labels=c("X0", "X1"))) %>%
       select(Nbloom, all_of(covar_int), lonlat, Nbloom1) 
     test.df01 <- test.df_ %>% filter(Nbloom1==0)
     test.df11 <- test.df_ %>% filter(Nbloom1==1)
-    pred.ridge <- predict(out.ridge, as.matrix(test.df_[,-1]), type="response")[,1]
-    pred.lasso <- predict(out.lasso, as.matrix(test.df_[,-1]), type="response")[,1]
-    pred.ridge_01 <- predict(out.ridge01, as.matrix(test.df01[,-1]), type="response")[,1]
-    pred.lasso_01 <- predict(out.lasso01, as.matrix(test.df01[,-1]), type="response")[,1]
+    pred.elast <- predict(elast_, test.df_, type="prob")[,2]
+    pred.elast_01 <- predict(elast01, test.df01, type="prob")[,2]
     if(nrow(test.df11) > 0) {
-      pred.ridge_11 <- predict(out.ridge11, as.matrix(test.df11[,-1]), type="response")[,1]
-      pred.lasso_11 <- predict(out.lasso11, as.matrix(test.df11[,-1]), type="response")[,1]
+      pred.elast_11 <- predict(elast11, test.df11, type="prob")[,2]
     } else {
-      pred.ridge_11 <- numeric(0)
-      pred.lasso_11 <- numeric(0)
+      pred.elast_11 <- numeric(0)
     }
     
     pred.df <- full_join(
       test.df %>%
-        mutate(glmRidge_mnpr=pred.ridge,
-               glmLasso_mnpr=pred.lasso),
+        mutate(glmElast_mnpr=pred.elast),
       tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
-             glmRidge_split_mnpr=c(pred.ridge_01, pred.ridge_11),
-             glmLasso_split_mnpr=c(pred.lasso_01, pred.lasso_11))
+             glmElast_split_mnpr=c(pred.elast_01, pred.elast_11))
     ) %>%
       mutate(covarSet=i.name,
              species=target)
@@ -191,62 +163,39 @@ for(i in length(covariate_sets)) {
       cv_test.df <- train.df %>% filter(year == yr)
       
       train.df_ <- cv_train.df %>% 
-        mutate(lonlat=lon_sc*lat_sc) %>%
+        mutate(lonlat=lon_sc*lat_sc,
+               Nbloom=factor(Nbloom, labels=c("X0", "X1"))) %>%
         select(Nbloom, all_of(covar_int), lonlat, Nbloom1)
       train.df01 <- train.df_ %>% filter(Nbloom1==0)
       train.df11 <- train.df_ %>% filter(Nbloom1==1)
       
-      cv.ridge <- cv.glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                            family="binomial", alpha=0)
-      out.ridge <- glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                          family="binomial", alpha=0, lambda=cv.ridge$lambda.min)
-      cv.ridge01 <- cv.glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                              family="binomial", alpha=0)
-      out.ridge01 <- glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                            family="binomial", alpha=0, lambda=cv.ridge01$lambda.min)
-      cv.ridge11 <- cv.glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                              family="binomial", alpha=0)
-      out.ridge11 <- glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                            family="binomial", alpha=0, lambda=cv.ridge11$lambda.min)
-      
-      cv.lasso <- cv.glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                            family="binomial", alpha=1)
-      out.lasso <- glmnet(as.matrix(train.df_[,-1]), train.df_$Nbloom, 
-                          family="binomial", alpha=1, lambda=cv.lasso$lambda.min)
-      cv.lasso01 <- cv.glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                              family="binomial", alpha=1)
-      out.lasso01 <- glmnet(as.matrix(train.df01[,-1]), train.df01$Nbloom, 
-                            family="binomial", alpha=1, lambda=cv.lasso01$lambda.min)
-      cv.lasso11 <- cv.glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                              family="binomial", alpha=1)
-      out.lasso11 <- glmnet(as.matrix(train.df11[,-1]), train.df11$Nbloom, 
-                            family="binomial", alpha=1, lambda=cv.lasso11$lambda.min)
+      elast_ <- train(Nbloom~., data=train.df_, 
+                      method="glmnet", trControl=elast.ctrl, tuneGrid=elast.grid)
+      elast01 <- train(Nbloom~., data=train.df01, 
+                       method="glmnet", trControl=elast.ctrl, tuneGrid=elast.grid)
+      elast11 <- train(Nbloom~., data=train.df11, 
+                       method="glmnet", trControl=elast.ctrl, tuneGrid=elast.grid)
       
       # Cross-validation predictions
       test.df_ <- cv_test.df %>% 
-        mutate(lonlat=lon_sc*lat_sc) %>%
+        mutate(lonlat=lon_sc*lat_sc,
+               Nbloom=factor(Nbloom, labels=c("X0", "X1"))) %>%
         select(Nbloom, all_of(covar_int), lonlat, Nbloom1) 
       test.df01 <- test.df_ %>% filter(Nbloom1==0)
       test.df11 <- test.df_ %>% filter(Nbloom1==1)
-      pred.ridge <- predict(out.ridge, as.matrix(test.df_[,-1]), type="response")[,1]
-      pred.lasso <- predict(out.lasso, as.matrix(test.df_[,-1]), type="response")[,1]
-      pred.ridge_01 <- predict(out.ridge01, as.matrix(test.df01[,-1]), type="response")[,1]
-      pred.lasso_01 <- predict(out.lasso01, as.matrix(test.df01[,-1]), type="response")[,1]
+      pred.elast <- predict(elast_, test.df_, type="prob")[,2]
+      pred.elast_01 <- predict(elast01, test.df01, type="prob")[,2]
       if(nrow(test.df11) > 0) {
-        pred.ridge_11 <- predict(out.ridge11, as.matrix(test.df11[,-1]), type="response")[,1]
-        pred.lasso_11 <- predict(out.lasso11, as.matrix(test.df11[,-1]), type="response")[,1]
+        pred.elast_11 <- predict(elast11, test.df11, type="prob")[,2]
       } else {
-        pred.ridge_11 <- numeric(0)
-        pred.lasso_11 <- numeric(0)
+        pred.elast_11 <- numeric(0)
       }
       
       cv_pred[[k]] <- full_join(
         cv_test.df %>%
-          mutate(glmRidge_mnpr=pred.ridge,
-                 glmLasso_mnpr=pred.lasso),
+          mutate(glmElast_mnpr=pred.elast),
         tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
-               glmRidge_split_mnpr=c(pred.ridge_01, pred.ridge_11),
-               glmLasso_split_mnpr=c(pred.lasso_01, pred.lasso_11))
+               glmElast_split_mnpr=c(pred.elast_01, pred.elast_11))
       ) %>%
         mutate(covarSet=i.name,
                species=target)

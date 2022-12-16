@@ -25,7 +25,7 @@ sep <- ifelse(.Platform$OS.type=="unix", "/", "\\")
 
 sp.i <- read_csv("data/sp_i.csv")
 
-sp <- 5
+sp <- 1
 
 
 
@@ -34,6 +34,7 @@ sp <- 5
 species <- sp.i$full
 
 covars.all <- c(
+  "ydaySin", "ydayCos",
   # WeStCOMS weekly averages
   "temp_L_wk", "salinity_L_wk", "short_wave_L_wk", "km_L_wk",
   "precip_L_wk", "tempStrat20m_L_wk", "tempStrat20m_R_wk",
@@ -95,70 +96,88 @@ i <- 1
     mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
   test.ML11 <- test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
     mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
+
+  folds <- createFoldsByYear(train.df)
+  folds01 <- createFoldsByYear(train.df %>% filter(Nbloom1==0))
+  folds11 <- createFoldsByYear(train.df %>% filter(Nbloom1==1))
   
-  rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F)
-  rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F)
-  rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F)
-  saveRDS(rf, glue("{f.prefix}rf_{f.suffix}.rds"))
-  saveRDS(rf.01, glue("{f.prefix}rf01_{f.suffix}.rds"))
-  saveRDS(rf.11, glue("{f.prefix}rf11_{f.suffix}.rds"))
+  ctrl <- trainControl("repeatedcv", repeats=3, classProbs=T, 
+                       index=folds$i.in, indexOut=folds$i.out)
+  ctrl01 <- trainControl("repeatedcv", repeats=3, classProbs=T, 
+                         index=folds01$i.in, indexOut=folds01$i.out)
+  ctrl11 <- trainControl("repeatedcv", repeats=3, classProbs=T, 
+                         index=folds11$i.in, indexOut=folds11$i.out)
+  rf.tuneGrid <- expand.grid(.mtry=1:(ncol(train.ML)/2))
+  rf_ <- train(Nbloom~., data=train.ML, method="rf", 
+               trControl=ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
+  rf_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), method="rf", 
+               trControl=ctrl01, tuneGrid=rf.tuneGrid, ntree=2000)
+  rf_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), method="rf", 
+               trControl=ctrl11, tuneGrid=rf.tuneGrid, ntree=2000)
+  saveRDS(rf_, glue("{f.prefix}rf_{f.suffix}.rds"))
+  saveRDS(rf_01, glue("{f.prefix}rf01_{f.suffix}.rds"))
+  saveRDS(rf_11, glue("{f.prefix}rf11_{f.suffix}.rds"))
   cat("Finished rf:", target, "\n")
   
-  svm.ctrl <- trainControl("repeatedcv", number=6, repeats=3, classProbs=T)
+  
   svm.tuneGrid <- expand.grid(C=2^(seq(-5,5,length.out=100)))
   svm_ <- train(Nbloom~., data=train.ML, 
-                method="svmRadialCost", trControl=svm.ctrl,
-                tuneLength=10, tuneGrid=svm.tuneGrid)
+                method="svmRadialCost", trControl=ctrl, tuneGrid=svm.tuneGrid)
   svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), 
-                  method="svmRadialCost", trControl=svm.ctrl,
-                  tuneLength=10, tuneGrid=svm.tuneGrid)
+                  method="svmRadialCost", trControl=ctrl01, tuneGrid=svm.tuneGrid)
   svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), 
-                  method="svmRadialCost", trControl=svm.ctrl,
-                  tuneLength=10, tuneGrid=svm.tuneGrid)
+                  method="svmRadialCost", trControl=ctrl11, tuneGrid=svm.tuneGrid)
   saveRDS(svm_, glue("{f.prefix}svm_{f.suffix}.rds"))
   saveRDS(svm_01, glue("{f.prefix}svm01_{f.suffix}.rds"))
   saveRDS(svm_11, glue("{f.prefix}svm11_{f.suffix}.rds"))
   cat("Finished svm:", target, "\n")
   
-  xg_ctrl <- list(max_depth=2:5, eta=2^(seq(-10,0,length.out=100)))
-  xg <- best_xgb(train.ML, xg_ctrl$max_depth, xg_ctrl$eta, cores)
-  xg.01 <- best_xgb(train.ML01, xg_ctrl$max_depth, xg_ctrl$eta, cores)
-  xg.11 <- best_xgb(train.ML11, xg_ctrl$max_depth, xg_ctrl$eta, cores)
-  saveRDS(xg, glue("{f.prefix}xgb_{f.suffix}.rds"))
-  saveRDS(xg.01, glue("{f.prefix}xgb01_{f.suffix}.rds"))
-  saveRDS(xg.11, glue("{f.prefix}xgb11_{f.suffix}.rds"))
+
+  xgb.tuneGrid <- expand.grid(min_child_weight=1, subsample=0.8, colsample_bytree=0.8,
+                              eta=2^(seq(-10,0,length.out=10)),
+                              max_depth=2:5,
+                              nrounds=seq(50, 200, length.out=4),
+                              gamma=2^(seq(-10,2,length.out=10)))
+  xgb_ <- train(Nbloom~., data=train.ML,
+                method="xgbTree", trControl=ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
+  xgb_01 <- train(Nbloom~., data=train.ML01,
+                  method="xgbTree", trControl=ctrl01, tuneGrid=xgb.tuneGrid, verbosity=0)
+  xgb_11 <- train(Nbloom~., data=train.ML11,
+                  method="xgbTree", trControl=ctrl11, tuneGrid=xgb.tuneGrid, verbosity=0)
+  saveRDS(xgb_, glue("{f.prefix}xgb_{f.suffix}.rds"))
+  saveRDS(xgb_01, glue("{f.prefix}xgb01_{f.suffix}.rds"))
+  saveRDS(xgb_11, glue("{f.prefix}xgb11_{f.suffix}.rds"))
   cat("Finished xgb:", target, "\n")
   
   # Fitted
   fit.df <- full_join(
     train.df %>%
-      mutate(rf_mnpr=rf$votes[,2],
+      mutate(rf_mnpr=predict(rf_, train.ML, type="prob")[,2],
              svm_mnpr=predict(svm_, train.ML, type="prob")[,2],
-             xgb_mnpr=predict(xg, as.matrix(train.ML[,-1]))),
+             xgb_mnpr=predict(xgb_, train.ML, type="prob")[,2]),
     tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
-           rf_split_mnpr=c(rf.01$votes[,2], rf.11$votes[,2]),
+           rf_split_mnpr=c(predict(rf_01, train.ML01, type="prob")[,2],
+                           predict(rf_11, train.ML11, type="prob")[,2]),
            svm_split_mnpr=c(predict(svm_01, train.ML01, type="prob")[,2],
                             predict(svm_11, train.ML11, type="prob")[,2]),
-           xgb_split_mnpr=c(predict(xg.01, as.matrix(train.ML01[,-1])),
-                            predict(xg.11, as.matrix(train.ML11[,-1]))))
+           xgb_split_mnpr=c(predict(xgb_01, train.ML01, type="prob")[,2],
+                            predict(xgb_11, train.ML11, type="prob")[,2]))
   ) %>%
     mutate(covarSet=i.name,
            species=target)
   write_csv(fit.df, glue("{f.prefix}fit_ML_{f.suffix}.csv"))
   
   # OOS predictions
-  test.df01 <- test.df %>% filter(Nbloom1==0) %>% droplevels
-  test.df11 <- test.df %>% filter(Nbloom1==1) %>% droplevels
-  pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
-  pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
+  pred.rf <- predict(rf_, test.ML, type="prob")[,2]
+  pred.rf_01 <- predict(rf_01, test.ML01, type="prob")[,2]
   pred.svm <- predict(svm_, test.ML, type="prob")[,2]
   pred.svm_01 <- predict(svm_01, test.ML01, type="prob")[,2]
-  pred.xgb <- predict(xg, as.matrix(test.ML[,-1]))
-  pred.xgb_01 <- predict(xg.01, as.matrix(test.ML01[,-1]))
-  if(nrow(test.df11) > 0) {
-    pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
+  pred.xgb <- predict(xgb_, test.ML, type="prob")[,2]
+  pred.xgb_01 <- predict(xgb_01, test.ML01, type="prob")[,2]
+  if(nrow(test.ML11) > 0) {
+    pred.rf_11 <- predict(rf_11, test.ML11, type="prob")[,2]
     pred.svm_11 <- predict(svm_11, test.ML11, type="prob")[,2]
-    pred.xgb_11 <- predict(xg.11, as.matrix(test.ML11[,-1]))
+    pred.xgb_11 <- predict(xgb_11, test.ML11, type="prob")[,2]
   } else {
     pred.rf_11 <- numeric(0)
     pred.svm_11 <- numeric(0)
@@ -189,11 +208,6 @@ i <- 1
     yr <- yrCV[k]
     cv_train.df <- train.df %>% filter(year != yr)
     cv_test.df <- train.df %>% filter(year == yr)
-    folds <- cv_train.df %>% 
-      mutate(rowid=row_number()) %>%
-      group_by(year) %>% 
-      group_split() %>% 
-      map(~c(.x$rowid))
     
     # Machine Learning: Random Forest, Support Vector Machine
     ML_vars <- c("Nbloom", "Nbloom1", "lon_sc", "lat_sc", covars)
@@ -210,36 +224,39 @@ i <- 1
     test.ML11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
     
-    rf <- tuneRF(x=train.ML[,-1], y=train.ML[,1], doBest=T, trace=F, plot=F, ntree=1000)
-    rf.01 <- tuneRF(x=train.ML01[,-1], y=train.ML01[,1], doBest=T, trace=F, plot=F, ntree=1000)
-    rf.11 <- tuneRF(x=train.ML11[,-1], y=train.ML11[,1], doBest=T, trace=F, plot=F, ntree=1000)
+    rf_ <- train(Nbloom~., data=train.ML, method="rf", 
+                 trControl=rf.ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
+    rf_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), method="rf", 
+                   trControl=rf.ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
+    rf_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), method="rf", 
+                   trControl=rf.ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
     
     svm_ <- train(Nbloom~., data=train.ML, 
-                  method="svmRadialCost", trControl=svm.ctrl,
-                  tuneLength=10, tuneGrid=svm.tuneGrid)
+                  method="svmRadialCost", trControl=svm.ctrl, tuneGrid=svm.tuneGrid)
     svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), 
-                    method="svmRadialCost", trControl=svm.ctrl,
-                    tuneLength=10, tuneGrid=svm.tuneGrid)
+                    method="svmRadialCost", trControl=svm.ctrl, tuneGrid=svm.tuneGrid)
     svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), 
-                    method="svmRadialCost", trControl=svm.ctrl,
-                    tuneLength=10, tuneGrid=svm.tuneGrid)
+                    method="svmRadialCost", trControl=svm.ctrl, tuneGrid=svm.tuneGrid)
     
-    xg <- best_xgb(train.ML, xg_ctrl$max_depth, xg_ctrl$eta, cores)
-    xg.01 <- best_xgb(train.ML01, xg_ctrl$max_depth, xg_ctrl$eta, cores)
-    xg.11 <- best_xgb(train.ML11, xg_ctrl$max_depth, xg_ctrl$eta, cores)
+    xgb_ <- train(Nbloom~., data=train.ML,
+                  method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
+    xgb_01 <- train(Nbloom~., data=train.ML01,
+                    method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
+    xgb_11 <- train(Nbloom~., data=train.ML11,
+                    method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
     
     
     # Cross-validation predictions
-    pred.rf <- predict(rf, newdata=test.ML, type="prob")[,2]
-    pred.rf_01 <- predict(rf.01, newdata=test.ML01, type="prob")[,2]
+    pred.rf <- predict(rf_, test.ML, type="prob")[,2]
+    pred.rf_01 <- predict(rf_01, test.ML01, type="prob")[,2]
     pred.svm <- predict(svm_, test.ML, type="prob")[,2]
     pred.svm_01 <- predict(svm_01, test.ML01, type="prob")[,2]
-    pred.xgb <- predict(xg, as.matrix(test.ML[,-1]))
-    pred.xgb_01 <- predict(xg.01, as.matrix(test.ML01[,-1]))
+    pred.xgb <- predict(xgb_, test.ML, type="prob")[,2]
+    pred.xgb_01 <- predict(xgb_01, test.ML01, type="prob")[,2]
     if(nrow(test.ML11) > 0) {
-      pred.rf_11 <- predict(rf.11, newdata=test.ML11, type="prob")[,2]
+      pred.rf_11 <- predict(rf_11, test.ML11, type="prob")[,2]
       pred.svm_11 <- predict(svm_11, test.ML11, type="prob")[,2]
-      pred.xgb_11 <- predict(xg.11, as.matrix(test.ML11[,-1]))
+      pred.xgb_11 <- predict(xgb_11, test.ML11, type="prob")[,2]
     } else {
       pred.rf_11 <- numeric(0)
       pred.svm_11 <- numeric(0)
