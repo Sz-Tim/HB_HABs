@@ -138,11 +138,11 @@ i <- 1
                               max_depth=2:5,
                               nrounds=seq(50, 200, length.out=4),
                               gamma=2^(seq(-10,2,length.out=10)))
-  xgb_ <- train(Nbloom~., data=train.ML,
+  xgb_ <- train(Nbloom~., data=train.ML, nthread=5,
                 method="xgbTree", trControl=ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
-  xgb_01 <- train(Nbloom~., data=train.ML01,
+  xgb_01 <- train(Nbloom~., data=train.ML01, nthread=5,
                   method="xgbTree", trControl=ctrl01, tuneGrid=xgb.tuneGrid, verbosity=0)
-  xgb_11 <- train(Nbloom~., data=train.ML11,
+  xgb_11 <- train(Nbloom~., data=train.ML11, nthread=5,
                   method="xgbTree", trControl=ctrl11, tuneGrid=xgb.tuneGrid, verbosity=0)
   saveRDS(xgb_, glue("{f.prefix}xgb_{f.suffix}.rds"))
   saveRDS(xgb_01, glue("{f.prefix}xgb01_{f.suffix}.rds"))
@@ -238,11 +238,11 @@ i <- 1
     svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), 
                     method="svmRadialCost", trControl=svm.ctrl, tuneGrid=svm.tuneGrid)
     
-    xgb_ <- train(Nbloom~., data=train.ML,
+    xgb_ <- train(Nbloom~., data=train.ML, nthread=5,
                   method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
-    xgb_01 <- train(Nbloom~., data=train.ML01,
+    xgb_01 <- train(Nbloom~., data=train.ML01, nthread=5,
                     method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
-    xgb_11 <- train(Nbloom~., data=train.ML11,
+    xgb_11 <- train(Nbloom~., data=train.ML11, nthread=5,
                     method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
     
     
