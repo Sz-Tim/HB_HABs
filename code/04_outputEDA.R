@@ -97,7 +97,7 @@ p <- outMn.df %>%
   arrange(species, model) %>%
   mutate(R2=1 - LL/first(LL)) %>%
   arrange(desc(R2)) %>% 
-  filter(modType != "Ensemble") %>%
+  # filter(modType != "Ensemble") %>%
   mutate(R2_rank=row_number()) %>%
   mutate(modCat=case_when(modType=="Null" ~ "Null",
                           modType=="GLM" ~ "ElasticNet",
@@ -121,7 +121,7 @@ p <- outMn.df %>%
   arrange(species, model) %>%
   mutate(R2=1 - LL/first(LL)) %>%
   arrange(desc(R2)) %>% 
-  filter(modType != "Ensemble") %>%
+  # filter(modType != "Ensemble") %>%
   mutate(R2_rank=row_number()) %>%
   filter(!is.na(R2)) %>%
   ggplot(aes(species, R2_rank, fill=model)) +
@@ -141,7 +141,7 @@ p <- outMn.df %>%
   arrange(species, model) %>%
   mutate(R2=1 - LL/first(LL)) %>%
   arrange(desc(R2)) %>% 
-  filter(modType != "Ensemble") %>%
+  # filter(modType != "Ensemble") %>%
   mutate(R2_rank=row_number()) %>%
   mutate(modCat=case_when(modType=="Null" ~ "Null",
                           modType=="GLM" ~ "ElasticNet",
