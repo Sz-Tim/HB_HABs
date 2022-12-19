@@ -17,7 +17,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-prior_type <- c("1-loose", "2-medium", "3-tight", "4-tighter")[1]
+prior_type <- c("1-loose", "2-medium", "3-tight", "4-tighter")[3]
 out.dir <- glue("out/{prior_type}/")
 
 sp.i <- read_csv("data/sp_i.csv")
@@ -102,13 +102,14 @@ p <- outMn.df %>%
   mutate(modCat=case_when(modType=="Null" ~ "Null",
                           modType=="GLM" ~ "ElasticNet",
                           grepl("Bayes", modType) ~ "Bayes",
-                          grepl("ML", modType) ~ "ML")) %>%
+                          grepl("ML", modType) ~ "ML",
+                          grepl("Ensemble", modType) ~ "Ensemble")) %>%
   filter(!is.na(R2)) %>%
   ggplot(aes(species, R2_rank, fill=modCat)) +
   # geom_point(shape=22, size=4, colour="grey30") + 
   geom_tile(colour="grey30") +
   facet_grid(dataSubset~.) + 
-  scale_fill_manual("Model type", values=c("#1b9e77", "#e6ab02", "#d95f02", "grey30")) +
+  scale_fill_manual("Model type", values=c("#1b9e77", "#e6ab02", "#e7298a", "#d95f02", "grey30")) +
   labs(x="", y=expression("Ranked McFadden's pseudo-R"^2)) +
   theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5), 
         panel.grid.minor.y=element_blank())
@@ -146,7 +147,8 @@ p <- outMn.df %>%
   mutate(modCat=case_when(modType=="Null" ~ "Null",
                           modType=="GLM" ~ "ElasticNet",
                           grepl("Bayes", modType) ~ "Bayes",
-                          grepl("ML", modType) ~ "ML")) %>%
+                          grepl("ML", modType) ~ "ML",
+                          grepl("Ensemble", modType) ~ "Ensemble")) %>%
   filter(!is.na(R2)) %>%
   ggplot(aes(modCat, R2_rank, fill=dataSubset)) +
   # geom_point(shape=22, size=4, colour="grey30") + 
