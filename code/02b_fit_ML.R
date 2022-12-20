@@ -9,13 +9,14 @@
 
 # set up ------------------------------------------------------------------
 
-pkgs <- c("tidyverse", "lubridate", "glue",
+pkgs <- c("tidyverse", "lubridate", "glue", "doParallel",
           "randomForest", "caret", "e1071", "xgboost")
 suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 options(mc.cores=10)
-cores <- 2
+cores <- 10
+registerDoParallel(cores)
 
 # Model details
 
@@ -27,6 +28,7 @@ sp.i <- read_csv("data/sp_i.csv")
 
 sp <- 1
 
+for(sp in 1:nrow(sp.i)) {
 
 
 # covariates --------------------------------------------------------------
@@ -72,7 +74,7 @@ i <- 1
   # initial fit -------------------------------------------------------------
   
   target <- species[sp]
-  f.prefix <- glue("out{sep}1-loose{sep}")
+  f.prefix <- glue("out{sep}3-tight{sep}")
   f.suffix <- glue("{i.name}_{target}")
   
   target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
@@ -107,6 +109,7 @@ i <- 1
                          index=folds01$i.in, indexOut=folds01$i.out)
   ctrl11 <- trainControl("repeatedcv", repeats=3, classProbs=T, 
                          index=folds11$i.in, indexOut=folds11$i.out)
+  
   rf.tuneGrid <- expand.grid(.mtry=1:(ncol(train.ML)/2))
   rf_ <- train(Nbloom~., data=train.ML, method="rf", 
                trControl=ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
@@ -121,12 +124,12 @@ i <- 1
   
   
   svm.tuneGrid <- expand.grid(C=2^(seq(-5,5,length.out=100)))
-  svm_ <- train(Nbloom~., data=train.ML, 
-                method="svmRadialCost", trControl=ctrl, tuneGrid=svm.tuneGrid)
-  svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), 
-                  method="svmRadialCost", trControl=ctrl01, tuneGrid=svm.tuneGrid)
-  svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), 
-                  method="svmRadialCost", trControl=ctrl11, tuneGrid=svm.tuneGrid)
+  svm_ <- train(Nbloom~., data=train.ML, method="svmRadialCost",
+                trControl=ctrl, tuneGrid=svm.tuneGrid)
+  svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), method="svmRadialCost",
+                  trControl=ctrl01, tuneGrid=svm.tuneGrid)
+  svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), method="svmRadialCost", 
+                  trControl=ctrl11, tuneGrid=svm.tuneGrid)
   saveRDS(svm_, glue("{f.prefix}svm_{f.suffix}.rds"))
   saveRDS(svm_01, glue("{f.prefix}svm01_{f.suffix}.rds"))
   saveRDS(svm_11, glue("{f.prefix}svm11_{f.suffix}.rds"))
@@ -138,12 +141,12 @@ i <- 1
                               max_depth=2:5,
                               nrounds=seq(50, 200, length.out=4),
                               gamma=2^(seq(-10,2,length.out=10)))
-  xgb_ <- train(Nbloom~., data=train.ML, nthread=5,
-                method="xgbTree", trControl=ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
-  xgb_01 <- train(Nbloom~., data=train.ML01, nthread=5,
-                  method="xgbTree", trControl=ctrl01, tuneGrid=xgb.tuneGrid, verbosity=0)
-  xgb_11 <- train(Nbloom~., data=train.ML11, nthread=5,
-                  method="xgbTree", trControl=ctrl11, tuneGrid=xgb.tuneGrid, verbosity=0)
+  xgb_ <- train(Nbloom~., data=train.ML, method="xgbTree",
+                trControl=ctrl, tuneGrid=xgb.tuneGrid, verbosity=0, nthread=cores)
+  xgb_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), method="xgbTree", 
+                  trControl=ctrl01, tuneGrid=xgb.tuneGrid, verbosity=0, nthread=cores)
+  xgb_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), method="xgbTree", 
+                  trControl=ctrl11, tuneGrid=xgb.tuneGrid, verbosity=0, nthread=cores)
   saveRDS(xgb_, glue("{f.prefix}xgb_{f.suffix}.rds"))
   saveRDS(xgb_01, glue("{f.prefix}xgb01_{f.suffix}.rds"))
   saveRDS(xgb_11, glue("{f.prefix}xgb11_{f.suffix}.rds"))
@@ -224,26 +227,37 @@ i <- 1
     test.ML11 <- cv_test.df %>% filter(Nbloom1==1) %>% select(one_of(ML_vars)) %>% 
       mutate(Nbloom=factor(Nbloom, levels=0:1, labels=c("X0", "X1"))) %>% as.data.frame()
     
+    folds <- createFoldsByYear(cv_train.df)
+    folds01 <- createFoldsByYear(cv_train.df %>% filter(Nbloom1==0))
+    folds11 <- createFoldsByYear(cv_train.df %>% filter(Nbloom1==1))
+    
+    ctrl <- trainControl("repeatedcv", repeats=3, classProbs=T, 
+                         index=folds$i.in, indexOut=folds$i.out)
+    ctrl01 <- trainControl("repeatedcv", repeats=3, classProbs=T, 
+                           index=folds01$i.in, indexOut=folds01$i.out)
+    ctrl11 <- trainControl("repeatedcv", repeats=3, classProbs=T, 
+                           index=folds11$i.in, indexOut=folds11$i.out)
+    
     rf_ <- train(Nbloom~., data=train.ML, method="rf", 
-                 trControl=rf.ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
+                 trControl=ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
     rf_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), method="rf", 
-                   trControl=rf.ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
+                   trControl=ctrl01, tuneGrid=rf.tuneGrid, ntree=2000)
     rf_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), method="rf", 
-                   trControl=rf.ctrl, tuneGrid=rf.tuneGrid, ntree=2000)
+                   trControl=ctrl11, tuneGrid=rf.tuneGrid, ntree=2000)
     
-    svm_ <- train(Nbloom~., data=train.ML, 
-                  method="svmRadialCost", trControl=svm.ctrl, tuneGrid=svm.tuneGrid)
-    svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), 
-                    method="svmRadialCost", trControl=svm.ctrl, tuneGrid=svm.tuneGrid)
-    svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), 
-                    method="svmRadialCost", trControl=svm.ctrl, tuneGrid=svm.tuneGrid)
+    svm_ <- train(Nbloom~., data=train.ML, method="svmRadialCost",
+                  trControl=ctrl, tuneGrid=svm.tuneGrid)
+    svm_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), method="svmRadialCost",
+                    trControl=ctrl01, tuneGrid=svm.tuneGrid)
+    svm_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), method="svmRadialCost", 
+                    trControl=ctrl11, tuneGrid=svm.tuneGrid)
     
-    xgb_ <- train(Nbloom~., data=train.ML, nthread=5,
-                  method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
-    xgb_01 <- train(Nbloom~., data=train.ML01, nthread=5,
-                    method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
-    xgb_11 <- train(Nbloom~., data=train.ML11, nthread=5,
-                    method="xgbTree", trControl=xgb.ctrl, tuneGrid=xgb.tuneGrid, verbosity=0)
+    xgb_ <- train(Nbloom~., data=train.ML, method="xgbTree",
+                  trControl=ctrl, tuneGrid=xgb.tuneGrid, verbosity=0, nthread=cores)
+    xgb_01 <- train(Nbloom~., data=train.ML01 %>% select(-Nbloom1), method="xgbTree", 
+                    trControl=ctrl01, tuneGrid=xgb.tuneGrid, verbosity=0, nthread=cores)
+    xgb_11 <- train(Nbloom~., data=train.ML11 %>% select(-Nbloom1), method="xgbTree", 
+                    trControl=ctrl11, tuneGrid=xgb.tuneGrid, verbosity=0, nthread=cores)
     
     
     # Cross-validation predictions
@@ -281,9 +295,9 @@ i <- 1
   
   
   cat("Finished", target, "\n")
-# }
+}
 
-
+closeAllConnections()
 
 
 
