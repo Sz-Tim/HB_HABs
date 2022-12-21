@@ -445,7 +445,7 @@ for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
-                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
+                                                 x_var_temp=seq(-2, 2, 0.25)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
@@ -497,7 +497,7 @@ for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
-                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
+                                                 x_var_temp=seq(-2, 2, 0.25)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
@@ -549,7 +549,7 @@ for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
-                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
+                                                 x_var_temp=seq(-2, 2, 0.25)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
