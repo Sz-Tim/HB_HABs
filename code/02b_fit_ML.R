@@ -122,7 +122,7 @@ i <- 1
   saveRDS(rf_11, glue("{f.prefix}rf11_{f.suffix}.rds"))
   cat("Finished rf:", target, "\n")
   
-  
+  set.seed(123)
   svm.tuneGrid <- expand.grid(C=2^(seq(-5,5,length.out=100)))
   svm_ <- train(Nbloom~., data=train.ML, method="svmRadialCost",
                 trControl=ctrl, tuneGrid=svm.tuneGrid)
