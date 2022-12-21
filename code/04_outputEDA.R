@@ -417,7 +417,7 @@ sams.cols <- c("alexandrium_sp"="#2A5883",
                "karenia_mikimotoi"="#A9DAE0",
                "prorocentrum_lima"="#E77334",
                "pseudo_nitzschia_sp"="#D21E4C")
-site_sample <- sample(unique(outMn.df$siteid), 20)
+site_sample <- unique(outMn.df$siteid)
 p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk', 
                'tempStrat20mLwk', 'tempStrat20mRwk', 
                'windVel', 'waterVelL', 'waterVelR', 
@@ -429,7 +429,6 @@ p.effects <- c('tempLwk', 'salinityLwk', 'shortwaveLwk', 'kmLwk', 'precipLwk',
                'windLwkdt', 'waterLwkdt', 'waterRwkdt', 
                'chlwkdt', 'o2wkdt', 'phwkdt', 'po4wkdt',
                'NlnWt1', 'NlnWt2', 'NlnRAvg1', 'NlnRAvg2')
-if(prior_type=="full") p.effects <- c(p.effects, 'Nbloom1', "Nbloom2")
 
 
 
@@ -446,7 +445,7 @@ for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
-                                                 x_var_temp=seq(-2, 2, 1)) %>%
+                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
@@ -498,7 +497,7 @@ for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
-                                                 x_var_temp=seq(-2, 2, 1)) %>%
+                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
@@ -550,7 +549,7 @@ for(i in seq_along(pred.ls)) {
   pred.ls[[i]] <- map_dfr(p.nonZero[[i]]$par, 
                           ~bind_cols(expand_grid(yday=seq(0, 364, length.out=52),
                                                  siteid=site_sample,
-                                                 x_var_temp=seq(-2, 2, 1)) %>%
+                                                 x_var_temp=seq(-2, 2, 0.5)) %>%
                                        mutate(x_var=x_var_temp) %>%
                                        setNames(c("yday", "siteid", .x, "x_var")) %>%
                                        mutate(ydayCos=cos(yday*2*pi/365),
