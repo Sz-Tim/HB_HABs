@@ -16,7 +16,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-prior_type <- c("1-loose", "2-medium", "3-tight", "4-tighter")[4]
+prior_type <- c("1-loose", "2-medium", "3-tight", "4-tighter", "full")[5]
 out.dir <- glue("out/{prior_type}/")
 
 sp.i <- read_csv("data/sp_i.csv")
@@ -77,27 +77,30 @@ null_4wk.df <- null_4wk.df %>% ungroup
 # ensemble models ---------------------------------------------------------
 
 # calculate LL-based weights
+wt.penalty <- 4
 wt.tot <- cv.df %>% 
   group_by(species) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x^2/rowSums(across(ends_with("wt"))^2))) %>% 
+  mutate(across(ends_with("wt"), ~.x^wt.penalty)) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
   ungroup
 wt.month <- cv.df %>% 
   group_by(species, month) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x^2/rowSums(across(ends_with("wt"))^2))) %>% 
+  mutate(across(ends_with("wt"), ~.x^wt.penalty)) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
   ungroup
 wt.B1 <- cv.df %>% 
   group_by(species, Nbloom1) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(ends_with("wt"), ~.x^2/rowSums(across(ends_with("wt"))^2))) %>% 
+  mutate(across(ends_with("wt"), ~.x^wt.penalty)) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
   ungroup
-wt.HB <- cv.df %>% 
-  group_by(species, Nbloom1) %>% 
+wt.moB1 <- cv.df %>% 
+  group_by(species, Nbloom1, month) %>% 
   summarise(across(ends_with("mnpr"), ~1/sum(-dbinom(Nbloom, 1, .x, log=T)), .names="{.col}_wt")) %>%
-  mutate(across(contains("svm"), ~0), across(contains("xgb"), ~0), across(contains("rf"), ~0),
-         across(contains("glm"), ~0), across(contains("ord_"), ~0), across(contains("bern_"), ~0)) %>%
-  mutate(across(ends_with("wt"), ~.x^2/rowSums(across(ends_with("wt"))^2))) %>% 
+  mutate(across(ends_with("wt"), ~.x^wt.penalty)) %>%
+  mutate(across(ends_with("wt"), ~.x/rowSums(across(ends_with("wt"))))) %>% 
   ungroup
 
 fit.df_ <- full_join(
@@ -136,11 +139,11 @@ fit.df_ <- full_join(
               fit.df %>% 
                 pivot_longer(ends_with("mnpr"), names_to="model", values_to="pred") %>%
                 mutate(model=str_remove(model, "_mnpr")), 
-              wt.HB %>% 
+              wt.moB1 %>% 
                 pivot_longer(ends_with("wt"), names_to="model", values_to="wt") %>%
                 mutate(model=str_remove(model, "_mnpr_wt"))) %>%
               group_by(obsid, species) %>%
-              summarise(avgHB_mnpr=sum(pred*wt, na.rm=T))) %>%
+              summarise(avgMoB1_mnpr=sum(pred*wt, na.rm=T))) %>%
   mutate(yday=yday(date)) %>%
   left_join(., null_grand.df %>% rename(grand_mnpr=mn)) %>%
   left_join(., null_4wk.df %>% rename(fourWk_mnpr=mn)) %>%
@@ -192,11 +195,11 @@ pred.df_ <- full_join(
               pred.df %>% 
                 pivot_longer(ends_with("mnpr"), names_to="model", values_to="pred") %>%
                 mutate(model=str_remove(model, "_mnpr")), 
-              wt.HB %>% 
+              wt.moB1 %>% 
                 pivot_longer(ends_with("wt"), names_to="model", values_to="wt") %>%
                 mutate(model=str_remove(model, "_mnpr_wt"))) %>%
               group_by(obsid, species) %>%
-              summarise(avgHB_mnpr=sum(pred*wt, na.rm=T))) %>%
+              summarise(avgMoB1_mnpr=sum(pred*wt, na.rm=T))) %>%
   mutate(yday=yday(date)) %>%
   left_join(., null_grand.df %>% rename(grand_mnpr=mn)) %>%
   left_join(., null_4wk.df %>% rename(fourWk_mnpr=mn)) %>%
