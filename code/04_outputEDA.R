@@ -17,7 +17,7 @@ theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
 
-prior_type <- c("1-loose", "2-medium", "3-tight", "4-tighter")[3]
+prior_type <- c("1-loose", "2-medium", "3-tight", "4-tighter", "full")[5]
 out.dir <- glue("out/{prior_type}/")
 
 sp.i <- read_csv("data/sp_i.csv")
@@ -38,7 +38,7 @@ mod_cols <- c(grand="black", fourWk="grey40",
               rf="green4", rf_split="green3",
               svm="olivedrab", svm_split="olivedrab4", 
               xgb="yellow3", xgb_split="yellow4",
-              avg="purple", avgHB="purple2", avgMo="purple3", avgB1="purple4")
+              avg="purple", avgMoB1="purple2", avgMo="purple3", avgB1="purple4")
 mod.i <- tibble(mod_col=names(mod_cols),
                 mod_clean=c("Grand mean", "4-week mean", 
                             paste0("GLM-", 1:2),
@@ -47,7 +47,7 @@ mod.i <- tibble(mod_col=names(mod_cols),
                             "RF-1", "RF-2",
                             "SVM-1", "SVM-2",
                             "XGB-1", "XGB-2",
-                            paste0("Ensemble-", c("Tot", "Bayes", "Month", "Bloom"))),
+                            paste0("Ensemble-", c("Tot", "MoB1", "Month", "Bloom"))),
                 mod_short=c("Mean", "4-wk", 
                             "GLM-1", "GLM-2", 
                             "L-1", "L-2", 
@@ -55,7 +55,7 @@ mod.i <- tibble(mod_col=names(mod_cols),
                             "RF-1", "RF-2", 
                             "SVM-1", "SVM-2", 
                             "XGB-1", "XGB-2",
-                            "Ens-Avg", "Ens-HB", "Ens-Mo", "Ens-B1"))
+                            "Ens-Avg", "Ens-MoB1", "Ens-Mo", "Ens-B1"))
 modType_cols <- c("Null"="black", "GLM"="grey60", "Ensemble"="#e7298a",
                   "ML: RF"="#d95f02", "ML: SVM"="#e6ab02", "ML: XGB"="#7570b3", 
                   "Bayes: Ordinal"="#1b9e77", "Bayes: Logistic"="#66a61e")
@@ -217,16 +217,16 @@ thresh.TSS <- map_dfr(thresh,
 # anim_save("figs/TSS_pBloomThresh.gif", anim, nframes=3*length(thresh), fps=32,
 #           width=10, height=4.5, res=300, units="in")
 
-
+TSS.mods <- c("fourWk", "glmElast", "bernP", "ordP", "rf", "avgMoB1")
 p <- thresh.TSS %>%
   filter(dataSubset=="oos") %>%
-  filter(model %in% c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")) %>%
+  filter(model %in% TSS.mods) %>%
   ggplot(aes(thresh, TSS, group=model, colour=model)) +
   geom_vline(data=outMn.df %>% filter(model=="grand") %>%
                group_by(species) %>% summarise(grandMean=mean(pred)),
              aes(xintercept=grandMean), linetype=2) +
   geom_line() +
-  scale_colour_manual(values=mod_cols[c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")]) +
+  scale_colour_manual(values=mod_cols[TSS.mods]) +
   facet_grid(.~species) +
   scale_y_continuous(limits=c(-0.1, 1), breaks=c(0, 0.5, 1)) +
   labs(x="p(bloom) threshold", y="TSS", title="Out-of-sample TSS") +
@@ -248,6 +248,7 @@ p <- thresh.TSS %>%
   filter(thresh==opt_thresh) %>%
   ggplot(aes(TSS, model, colour=modType)) + 
   geom_point() + 
+  geom_rug(sides="b") +
   scale_colour_manual(values=modType_cols) +
   facet_grid(.~species) +
   scale_x_continuous(limits=c(-0.1, 1), breaks=seq(0,1,0.25)) +
@@ -281,13 +282,13 @@ thresh.HSS <- map_dfr(thresh,
                         filter(model!="Grand mean"))
 p <- thresh.HSS %>%
   filter(dataSubset=="oos") %>%
-  filter(model %in% c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")) %>%
+  filter(model %in% TSS.mods) %>%
   ggplot(aes(thresh, HSS, group=model, colour=model)) +
   geom_vline(data=outMn.df %>% filter(model=="grand") %>%
                group_by(species) %>% summarise(grandMean=mean(pred)),
              aes(xintercept=grandMean), linetype=2) +
   geom_line() +
-  scale_colour_manual(values=mod_cols[c("fourWk", "glm", "bernP", "ordP", "rf", "svm", "xgb", "avg")]) +
+  scale_colour_manual(values=mod_cols[TSS.mods]) +
   facet_grid(.~species) +
   scale_y_continuous(limits=c(-0.1, 1), breaks=c(0, 0.5, 1)) +
   labs(x="p(bloom) threshold", y="TSS", title="Out-of-sample HSS") +
@@ -308,7 +309,7 @@ p <- thresh.HSS %>%
   full_join(., opt.HSS) %>%
   filter(thresh==opt_thresh) %>%
   ggplot(aes(HSS, model, colour=modType)) + 
-  geom_point() + 
+  geom_point() + geom_rug(sides="b") +
   scale_colour_manual(values=modType_cols) +
   facet_grid(.~species) +
   scale_x_continuous(limits=c(-0.1, 1), breaks=seq(0,1,0.25)) +
