@@ -78,20 +78,19 @@ makeFormula <- function(data.df, covs, resp, covs_date=NULL, flist=NULL, sTerms=
 
 
 
-calc_ord_mnpr <- function(pred.ord, bloomThresh) {
-  tibble(pr0=c(colMeans(pred.ord[,,1,drop=F])),
-         pr1=c(colMeans(pred.ord[,,2,drop=F])),
-         pr2=c(colMeans(pred.ord[,,3,drop=F])),
-         pr3=c(colMeans(pred.ord[,,4,drop=F])),
-         obsid=1:dim(pred.ord)[2]) %>%
-    pivot_longer(1:4, names_to="ord_cat", values_to="ord_pr") %>%
-    mutate(ord_cat=as.numeric(str_sub(ord_cat, -1L, -1L))) %>%
-    filter(ord_cat >= bloomThresh) %>%
-    group_by(obsid) %>%
-    summarise(ord_mnpr=sum(ord_pr),
-              across(everything(), ~last(.x))) %>%
-    select(ord_mnpr) %>% 
-    as_vector
+calc_ord_mnpr <- function(pred.ord, bloomThresh, summaryStat="mean") {
+  post_bloomPr <- apply(pred.ord[,,(bloomThresh+1):4], 1:2, sum)
+  if(summaryStat=="none") {
+    post_bloomPr
+  } else {
+    switch(summaryStat,
+           mean=apply(post_bloomPr, 2, mean),
+           median=apply(post_bloomPr, 2, median),
+           q80=apply(post_bloomPr, 2, quantile, probs=0.8),
+           q90=apply(post_bloomPr, 2, quantile, probs=0.9),
+           q95=apply(post_bloomPr, 2, quantile, probs=0.95),
+           q99=apply(post_bloomPr, 2, quantile, probs=0.99))
+  }
 }
 
 
