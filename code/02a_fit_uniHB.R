@@ -14,6 +14,8 @@ suppressMessages(invisible(lapply(pkgs, library, character.only=T)))
 theme_set(theme_bw() + theme(panel.grid.minor=element_blank()))
 walk(dir("code", "*00_fn", full.names=T), source)
 
+remake_dataset <- F
+
 # Model details
 ctrl <- list(adapt_delta=0.95, max_treedepth=20)
 chains <- 4
@@ -43,71 +45,74 @@ sp.i <- read_csv("data/sp_i.csv")
 
 species <- sp.i$full
 
-sampling.df <- read_csv(glue("data{sep}sampling_local.csv"))
+if(remake_dataset) {
+  sampling.df <- read_csv(glue("data{sep}sampling_local.csv"))
+  
+  thresh.df <- read_csv(glue("data{sep}hab_tf_thresholds.csv")) %>%
+    filter(!is.na(tl)) %>%
+    group_by(hab_parameter, tl) %>%
+    slice_head(n=1) %>%
+    ungroup %>%
+    mutate(bloom=as.numeric(!is.na(alert)))
+  
+  hydro.df <- dir("data", "hydro_", full.names=T) %>% 
+    map(~read_csv(.x, show_col_types=F)) %>%
+    reduce(., full_join) %>% 
+    pivot_longer(c(contains("_L"), contains("_R")), names_to="param", values_to="value") %>%
+    mutate(parType=str_sub(param, 1, -4),
+           res=str_sub(param, -2, -2),
+           lag=str_sub(param, -1, -1)) %>%
+    select(-param) %>%
+    pivot_wider(names_from="parType", values_from="value") %>%
+    mutate(water=sqrt(u^2 + v^2 + ww^2),
+           wind=sqrt(uwind_speed^2 + vwind_speed^2),
+           waterDir=atan2(v, u), # moving N = 0; moving S = pi
+           windDir=atan2(vwind_speed, uwind_speed), # blowing N = 0; blowing S = pi
+           timespan=if_else(lag=="0", "0", "wk")) %>% 
+    select(-u, -v, -ww, -vwind_speed, -uwind_speed) %>%
+    group_by(obs.id, res, timespan) %>%
+    summarise(across(where(is.numeric), ~mean(.x, na.rm=T))) %>%
+    ungroup %>%
+    pivot_wider(names_from=c(res, timespan), values_from=4:ncol(.),
+                names_glue="{.value}_{res}_{timespan}") %>%
+    select(obs.id, ends_with("wk")) %>%
+    left_join(., sampling.df %>% select(obs.id, site.id, date)) %>%
+    filter(complete.cases(.)) %>%
+    mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
+    group_by(site.id) %>%
+    mutate(across(ends_with("wk"),
+                  ~detrend_loess(day_cumul, .x, span="adapt"), 
+                  .names="{.col}_dt")) %>%
+    ungroup
+  connect.df <- read_csv(glue("data{sep}influx_20220801.csv")) %>%
+    mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
+    group_by(site.id) %>%
+    mutate(influx_wk=zoo::rollsum(influx, 7, align='right', fill="extend")) %>%
+    mutate(across(starts_with("influx"), ~log(.x+1))) %>%
+    ungroup
+  cprn.df <- read_csv("data/cprn_20211231.csv") %>%
+    select(site.id, date, attn_wk, chl_wk, dino_wk, o2_wk, ph_wk, po4_wk) %>%
+    filter(complete.cases(.)) %>%
+    mutate(across(ends_with("wk"), log1p)) %>%
+    mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
+    group_by(site.id) %>%
+    mutate(across(ends_with("wk"),
+                  ~detrend_loess(day_cumul, .x, span=0.1), 
+                  .names="{.col}_dt")) %>%
+    ungroup
+  site.100k <-  read_csv("data/fsa_site_pairwise_distances.csv") %>% 
+    bind_rows(tibble(origin=unique(.$origin), 
+                     destination=unique(.$origin), 
+                     distance=0)) %>%
+    filter(distance < 100e3) %>% 
+    select(-distance) %>% 
+    group_by(origin) %>% 
+    nest(data=destination) %>%
+    mutate(destination_c=c(data[[1]])) %>% 
+    select(-data) %>%
+    ungroup
+}
 
-thresh.df <- read_csv(glue("data{sep}hab_tf_thresholds.csv")) %>%
-  filter(!is.na(tl)) %>%
-  group_by(hab_parameter, tl) %>%
-  slice_head(n=1) %>%
-  ungroup %>%
-  mutate(bloom=as.numeric(!is.na(alert)))
-
-hydro.df <- dir("data", "hydro_", full.names=T) %>% 
-  map(~read_csv(.x, show_col_types=F)) %>%
-  reduce(., full_join) %>% 
-  pivot_longer(c(contains("_L"), contains("_R")), names_to="param", values_to="value") %>%
-  mutate(parType=str_sub(param, 1, -4),
-         res=str_sub(param, -2, -2),
-         lag=str_sub(param, -1, -1)) %>%
-  select(-param) %>%
-  pivot_wider(names_from="parType", values_from="value") %>%
-  mutate(water=sqrt(u^2 + v^2 + ww^2),
-         wind=sqrt(uwind_speed^2 + vwind_speed^2),
-         waterDir=atan2(v, u), # moving N = 0; moving S = pi
-         windDir=atan2(vwind_speed, uwind_speed), # blowing N = 0; blowing S = pi
-         timespan=if_else(lag=="0", "0", "wk")) %>% 
-  select(-u, -v, -ww, -vwind_speed, -uwind_speed) %>%
-  group_by(obs.id, res, timespan) %>%
-  summarise(across(where(is.numeric), ~mean(.x, na.rm=T))) %>%
-  ungroup %>%
-  pivot_wider(names_from=c(res, timespan), values_from=4:ncol(.),
-              names_glue="{.value}_{res}_{timespan}") %>%
-  select(obs.id, ends_with("wk")) %>%
-  left_join(., sampling.df %>% select(obs.id, site.id, date)) %>%
-  filter(complete.cases(.)) %>%
-  mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
-  group_by(site.id) %>%
-  mutate(across(ends_with("wk"),
-                ~detrend_loess(day_cumul, .x, span="adapt"), 
-                .names="{.col}_dt")) %>%
-  ungroup
-connect.df <- read_csv(glue("data{sep}influx_20220801.csv")) %>%
-  mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
-  group_by(site.id) %>%
-  mutate(influx_wk=zoo::rollsum(influx, 7, align='right', fill="extend")) %>%
-  mutate(across(starts_with("influx"), ~log(.x+1))) %>%
-  ungroup
-cprn.df <- read_csv("data/cprn_20211231.csv") %>%
-  select(site.id, date, attn_wk, chl_wk, dino_wk, o2_wk, ph_wk, po4_wk) %>%
-  filter(complete.cases(.)) %>%
-  mutate(across(ends_with("wk"), log1p)) %>%
-  mutate(day_cumul=as.numeric(date - ymd("2010-01-01"))) %>%
-  group_by(site.id) %>%
-  mutate(across(ends_with("wk"),
-                ~detrend_loess(day_cumul, .x, span=0.1), 
-                .names="{.col}_dt")) %>%
-  ungroup
-site.100k <-  read_csv("data/fsa_site_pairwise_distances.csv") %>% 
-  bind_rows(tibble(origin=unique(.$origin), 
-                   destination=unique(.$origin), 
-                   distance=0)) %>%
-  filter(distance < 100e3) %>% 
-  select(-distance) %>% 
-  group_by(origin) %>% 
-  nest(data=destination) %>%
-  mutate(destination_c=c(data[[1]])) %>% 
-  select(-data) %>%
-  ungroup
 
 # >0.85 cor(res,time) = temp, salinity
 # >0.85 cor(res) = short_wave, km, precip, wind, windDir
@@ -234,68 +239,73 @@ for(i in length(covariate_sets)) {
   f.prefix <- glue("out{sep}{pri.var$i}{sep}")
   f.suffix <- glue("{i.name}_{target}")
   
-  target.tf <- thresh.df %>% filter(hab_parameter==target)
-  
-  target.df <- sampling.df %>%
-    rename(N=!!target) %>%
-    select(obs.id, site.id, date, hour, grid, lon, lat, fetch, openBearing, N) %>%
-    mutate(yday=yday(date),
-           ydayCos=cos(2*pi*yday/365),
-           ydaySin=sin(2*pi*yday/365),
-           year=year(date),
-           N=round(N),
-           N.ln=log(N+1)) %>%
-    rowwise() %>%
-    mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
-    ungroup %>%
-    mutate(N.catF=factor(N.cat, levels=unique(target.tf$tl), ordered=T),
-           N.catNum=as.numeric(N.catF),
-           N.bloom=target.tf$bloom[match(N.cat, target.tf$tl)]) %>%
-    arrange(site.id, date) %>%
-    group_by(site.id) %>%
-    multijetlag(N.ln, N.cat, N.catF, N.bloom, date, n=2) %>%
-    ungroup %>%
-    mutate(across(starts_with("date_"), ~as.numeric(date-.x)),
-           # I don't love this since small if N.ln_x is small OR date_x is large
-           N.lnWt_1=N.ln_1/date_1,
-           N.lnWt_2=N.ln_2/date_2) %>%
-    full_join(hydro.df) %>%
-    full_join(connect.df) %>%
-    full_join(cprn.df) %>%
-    mutate(across(contains("Dir_"), ~cos(.x-openBearing))) %>% # 1 = toward open ocean, -1 = in from open ocean
-    mutate(ydaySC=ydaySin*ydayCos,
-           windVel=wind_L_wk*windDir_L_wk,
-           waterVelL=water_L_wk*waterDir_L_wk,
-           waterVelR=water_R_wk*waterDir_R_wk) %>%
-    mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), LaplacesDemon::CenterScale)) %>%
-    rename_with(~str_remove_all(.x, "\\.|_")) %>%
-    arrange(siteid, date) %>%
-    select(siteid, lon, lat, date, year, obsid,
-           starts_with("N"), starts_with("date_"), starts_with("yday"),
-           one_of(covars, covar_int, covar_s)) %>%
-    filter(complete.cases(.)) %>%
-    mutate(covarSet=i.name,
-           NlnRAvg1=NA,
-           NlnRAvg2=NA,
-           lon_sc=LaplacesDemon::CenterScale(lon),
-           lat_sc=LaplacesDemon::CenterScale(lat),
-           species=target) 
-  
-  
-  if("NlnRAvg1" %in% covar_s) {
-    for(j in 1:nrow(target.df)) {
-      site_j <- target.df$siteid[j]
-      date_j <- target.df$date[j]
-      target_wk <- target.df %>% select(siteid, date, Nln1, Nln2) %>%
-        filter(siteid %in% site.100k$destination_c[site.100k$origin==site_j][[1]]) %>%
-        filter(date <= date_j & date > date_j-7) 
-      target.df$NlnRAvg1[j] <- mean(target_wk$Nln1)
-      target.df$NlnRAvg2[j] <- mean(target_wk$Nln2)
-      if(j %% 100 == 0) {cat(j, "of", nrow(target.df), "\n")}
-    } 
+  if(remake_dataset) {
+    target.tf <- thresh.df %>% filter(hab_parameter==target)
+    
+    target.df <- sampling.df %>%
+      rename(N=!!target) %>%
+      select(obs.id, site.id, date, hour, grid, lon, lat, fetch, openBearing, N) %>%
+      mutate(yday=yday(date),
+             ydayCos=cos(2*pi*yday/365),
+             ydaySin=sin(2*pi*yday/365),
+             year=year(date),
+             N=round(N),
+             N.ln=log(N+1)) %>%
+      rowwise() %>%
+      mutate(N.cat=target.tf$tl[max(which(N >= target.tf$min_ge))]) %>%
+      ungroup %>%
+      mutate(N.catF=factor(N.cat, levels=unique(target.tf$tl), ordered=T),
+             N.catNum=as.numeric(N.catF),
+             N.bloom=target.tf$bloom[match(N.cat, target.tf$tl)]) %>%
+      arrange(site.id, date) %>%
+      group_by(site.id) %>%
+      multijetlag(N.ln, N.cat, N.catF, N.bloom, date, n=2) %>%
+      ungroup %>%
+      mutate(across(starts_with("date_"), ~as.numeric(date-.x)),
+             # I don't love this since small if N.ln_x is small OR date_x is large
+             N.lnWt_1=N.ln_1/date_1,
+             N.lnWt_2=N.ln_2/date_2) %>%
+      full_join(hydro.df) %>%
+      full_join(connect.df) %>%
+      full_join(cprn.df) %>%
+      mutate(across(contains("Dir_"), ~cos(.x-openBearing))) %>% # 1 = toward open ocean, -1 = in from open ocean
+      mutate(ydaySC=ydaySin*ydayCos,
+             windVel=wind_L_wk*windDir_L_wk,
+             waterVelL=water_L_wk*waterDir_L_wk,
+             waterVelR=water_R_wk*waterDir_R_wk) %>%
+      mutate(across(one_of(grep("Dir", covars, invert=T, value=T)), LaplacesDemon::CenterScale)) %>%
+      rename_with(~str_remove_all(.x, "\\.|_")) %>%
+      arrange(siteid, date) %>%
+      select(siteid, lon, lat, date, year, obsid,
+             starts_with("N"), starts_with("date_"), starts_with("yday"),
+             one_of(covars, covar_int, covar_s)) %>%
+      filter(complete.cases(.)) %>%
+      mutate(covarSet=i.name,
+             NlnRAvg1=NA,
+             NlnRAvg2=NA,
+             lon_sc=LaplacesDemon::CenterScale(lon),
+             lat_sc=LaplacesDemon::CenterScale(lat),
+             species=target) 
+    
+    
+    if("NlnRAvg1" %in% covar_s) {
+      for(j in 1:nrow(target.df)) {
+        site_j <- target.df$siteid[j]
+        date_j <- target.df$date[j]
+        target_wk <- target.df %>% select(siteid, date, Nln1, Nln2) %>%
+          filter(siteid %in% site.100k$destination_c[site.100k$origin==site_j][[1]]) %>%
+          filter(date <= date_j & date > date_j-7) 
+        target.df$NlnRAvg1[j] <- mean(target_wk$Nln1)
+        target.df$NlnRAvg2[j] <- mean(target_wk$Nln2)
+        if(j %% 100 == 0) {cat(j, "of", nrow(target.df), "\n")}
+      } 
+    }
+    
+    write_csv(target.df, glue("{f.prefix}dataset_{i.name}_{target}.csv"))
+  } else {
+    target.df <- read_csv(glue("{f.prefix}dataset_{i.name}_{target}.csv"))
   }
   
-  write_csv(target.df, glue("{f.prefix}dataset_{i.name}_{target}.csv"))
   
   train.df <- target.df %>% filter(year <= 2019)
   test.df <- target.df %>% filter(year > 2019)
