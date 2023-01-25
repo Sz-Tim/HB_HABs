@@ -370,18 +370,18 @@ for(i in length(covariate_sets)) {
   fit.df <- full_join(
     train.df %>%
       mutate(ord_mnpr=calc_ord_mnpr(fit.ord, bloomThresh, summaryStat="median"),
-             ordq90_mnpr=calc_ord_mnpr(fit.ord, bloomThresh, summaryStat="q90"),
+             ordmn_mnpr=calc_ord_mnpr(fit.ord, bloomThresh, summaryStat="mean"),
              ordP_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh, summaryStat="median"),
-             ordPq90_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh, summaryStat="q90")),
+             ordPmn_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh, summaryStat="mean")),
     tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
            bern_mnpr=c(apply(fit.bern01, 2, median), 
                        apply(fit.bern11, 2, median)),
-           bernq90_mnpr=c(apply(fit.bern01, 2, quantile, probs=0.9), 
-                          apply(fit.bern11, 2, quantile, probs=0.9)),
+           bernmn_mnpr=c(apply(fit.bern01, 2, mean), 
+                          apply(fit.bern11, 2, mean)),
            bernP_mnpr=c(apply(fit.bernP01, 2, median), 
                         apply(fit.bernP11, 2, median)),
-           bernPq90_mnpr=c(apply(fit.bernP01, 2, quantile, probs=0.9), 
-                           apply(fit.bernP11, 2, quantile, probs=0.9)))
+           bernPmn_mnpr=c(apply(fit.bernP01, 2, mean), 
+                           apply(fit.bernP11, 2, mean)))
   ) %>%
     mutate(covarSet=i.name,
            species=target)
@@ -399,24 +399,24 @@ for(i in length(covariate_sets)) {
     pred.bernP11 <- posterior_epred(out.bernP11, newdata=test.df11, allow_new_levels=T)
     pred.bern11.md <- apply(pred.bern11, 2, median)
     pred.bernP11.md <- apply(pred.bernP11, 2, median)
-    pred.bern11.q90 <- apply(pred.bern11, 2, quantile, probs=0.9)
-    pred.bernP11.q90 <- apply(pred.bernP11, 2, quantile, probs=0.9)
+    pred.bern11.mn <- apply(pred.bern11, 2, mean)
+    pred.bernP11.mn <- apply(pred.bernP11, 2, mean)
   } else {
-    pred.bern11.md <- pred.bern11.q90 <- numeric(0)
-    pred.bernP11.md <- pred.bernP11.q90 <- numeric(0)
+    pred.bern11.md <- pred.bern11.mn <- numeric(0)
+    pred.bernP11.md <- pred.bernP11.mn <- numeric(0)
   }
   
   pred.df <- full_join(
     test.df %>%
       mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="median"),
-             ordq90_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="q90"),
+             ordmn_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="mean"),
              ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="median"),
-             ordPq90_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="q90")),
+             ordPmn_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="mean")),
     tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
            bern_mnpr=c(apply(pred.bern01, 2, median), pred.bern11.md),
-           bernq90_mnpr=c(apply(pred.bern01, 2, quantile, probs=0.9), pred.bern11.q90),
+           bernmn_mnpr=c(apply(pred.bern01, 2, mean), pred.bern11.mn),
            bernP_mnpr=c(apply(pred.bernP01, 2, median), pred.bernP11.md),
-           bernPq90_mnpr=c(apply(pred.bernP01, 2, quantile, probs=0.9), pred.bernP11.q90))
+           bernPmn_mnpr=c(apply(pred.bernP01, 2, mean), pred.bernP11.mn))
   ) %>%
     mutate(covarSet=i.name,
            species=target)
@@ -489,24 +489,24 @@ for(i in length(covariate_sets)) {
       pred.bernP11 <- posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T)
       pred.bern11.md <- apply(pred.bern11, 2, median)
       pred.bernP11.md <- apply(pred.bernP11, 2, median)
-      pred.bern11.q90 <- apply(pred.bern11, 2, quantile, probs=0.9)
-      pred.bernP11.q90 <- apply(pred.bernP11, 2, quantile, probs=0.9)
+      pred.bern11.mn <- apply(pred.bern11, 2, mean)
+      pred.bernP11.mn <- apply(pred.bernP11, 2, mean)
     } else {
-      pred.bern11.md <- pred.bern11.q90 <- numeric(0)
-      pred.bernP11.md <- pred.bernP11.q90 <- numeric(0)
+      pred.bern11.md <- pred.bern11.mn <- numeric(0)
+      pred.bernP11.md <- pred.bernP11.mn <- numeric(0)
     }
     
     cv_pred[[k]] <- full_join(
       cv_test.df %>%
         mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="median"),
-               ordq90_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="q90"),
+               ordmn_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="mean"),
                ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="median"),
-               ordPq90_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="q90")),
+               ordPmn_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="mean")),
       tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
              bern_mnpr=c(apply(pred.bern01, 2, median), pred.bern11.md),
-             bernq90_mnpr=c(apply(pred.bern01, 2, quantile, probs=0.9), pred.bern11.q90),
+             bernmn_mnpr=c(apply(pred.bern01, 2, mean), pred.bern11.mn),
              bernP_mnpr=c(apply(pred.bernP01, 2, median), pred.bernP11.md),
-             bernPq90_mnpr=c(apply(pred.bernP01, 2, quantile, probs=0.9), pred.bernP11.q90))
+             bernPmn_mnpr=c(apply(pred.bernP01, 2, mean), pred.bernP11.mn))
     ) %>%
       mutate(covarSet=i.name,
              species=target)
