@@ -502,7 +502,7 @@ for(i in length(covariate_sets)) {
                ordq90_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="q90"),
                ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="median"),
                ordPq90_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="q90")),
-      tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
+      tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
              bern_mnpr=c(apply(pred.bern01, 2, median), pred.bern11.md),
              bernq90_mnpr=c(apply(pred.bern01, 2, quantile, probs=0.9), pred.bern11.q90),
              bernP_mnpr=c(apply(pred.bernP01, 2, median), pred.bernP11.md),
