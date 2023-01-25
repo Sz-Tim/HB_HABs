@@ -376,12 +376,12 @@ for(i in length(covariate_sets)) {
     tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
            bern_mnpr=c(apply(fit.bern01, 2, median), 
                        apply(fit.bern11, 2, median)),
-           bernmn_mnpr=c(apply(fit.bern01, 2, mean), 
-                          apply(fit.bern11, 2, mean)),
+           bernmn_mnpr=c(colMeans(fit.bern01), 
+                          colMeans(fit.bern11)),
            bernP_mnpr=c(apply(fit.bernP01, 2, median), 
                         apply(fit.bernP11, 2, median)),
-           bernPmn_mnpr=c(apply(fit.bernP01, 2, mean), 
-                           apply(fit.bernP11, 2, mean)))
+           bernPmn_mnpr=c(colMeans(fit.bernP01), 
+                          colMeans(fit.bernP11)))
   ) %>%
     mutate(covarSet=i.name,
            species=target)
@@ -399,8 +399,8 @@ for(i in length(covariate_sets)) {
     pred.bernP11 <- posterior_epred(out.bernP11, newdata=test.df11, allow_new_levels=T)
     pred.bern11.md <- apply(pred.bern11, 2, median)
     pred.bernP11.md <- apply(pred.bernP11, 2, median)
-    pred.bern11.mn <- apply(pred.bern11, 2, mean)
-    pred.bernP11.mn <- apply(pred.bernP11, 2, mean)
+    pred.bern11.mn <- colMeans(pred.bern11)
+    pred.bernP11.mn <- colMeans(pred.bernP11)
   } else {
     pred.bern11.md <- pred.bern11.mn <- numeric(0)
     pred.bernP11.md <- pred.bernP11.mn <- numeric(0)
@@ -414,9 +414,9 @@ for(i in length(covariate_sets)) {
              ordPmn_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="mean")),
     tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
            bern_mnpr=c(apply(pred.bern01, 2, median), pred.bern11.md),
-           bernmn_mnpr=c(apply(pred.bern01, 2, mean), pred.bern11.mn),
+           bernmn_mnpr=c(colMeans(pred.bern01), pred.bern11.mn),
            bernP_mnpr=c(apply(pred.bernP01, 2, median), pred.bernP11.md),
-           bernPmn_mnpr=c(apply(pred.bernP01, 2, mean), pred.bernP11.mn))
+           bernPmn_mnpr=c(colMeans(pred.bernP01), pred.bernP11.mn))
   ) %>%
     mutate(covarSet=i.name,
            species=target)
@@ -489,8 +489,8 @@ for(i in length(covariate_sets)) {
       pred.bernP11 <- posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T)
       pred.bern11.md <- apply(pred.bern11, 2, median)
       pred.bernP11.md <- apply(pred.bernP11, 2, median)
-      pred.bern11.mn <- apply(pred.bern11, 2, mean)
-      pred.bernP11.mn <- apply(pred.bernP11, 2, mean)
+      pred.bern11.mn <- colMeans(pred.bern11)
+      pred.bernP11.mn <- colMeans(pred.bernP11)
     } else {
       pred.bern11.md <- pred.bern11.mn <- numeric(0)
       pred.bernP11.md <- pred.bernP11.mn <- numeric(0)
@@ -504,9 +504,9 @@ for(i in length(covariate_sets)) {
                ordPmn_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="mean")),
       tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
              bern_mnpr=c(apply(pred.bern01, 2, median), pred.bern11.md),
-             bernmn_mnpr=c(apply(pred.bern01, 2, mean), pred.bern11.mn),
+             bernmn_mnpr=c(colMeans(pred.bern01), pred.bern11.mn),
              bernP_mnpr=c(apply(pred.bernP01, 2, median), pred.bernP11.md),
-             bernPmn_mnpr=c(apply(pred.bernP01, 2, mean), pred.bernP11.mn))
+             bernPmn_mnpr=c(colMeans(pred.bernP01), pred.bernP11.mn))
     ) %>%
       mutate(covarSet=i.name,
              species=target)

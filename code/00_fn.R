@@ -84,7 +84,7 @@ calc_ord_mnpr <- function(pred.ord, bloomThresh, summaryStat="mean") {
     post_bloomPr
   } else {
     switch(summaryStat,
-           mean=apply(post_bloomPr, 2, mean),
+           mean=colMeans(post_bloomPr),
            median=apply(post_bloomPr, 2, median),
            q80=apply(post_bloomPr, 2, quantile, probs=0.8),
            q90=apply(post_bloomPr, 2, quantile, probs=0.9),
