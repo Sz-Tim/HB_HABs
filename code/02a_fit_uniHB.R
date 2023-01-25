@@ -178,12 +178,14 @@ for(i in length(covariate_sets)) {
   covar_s <- grep(i.covs, covar_s.all, value=T)
   covar_date <- NULL
   
+
+# priors ------------------------------------------------------------------
+  
   # Smoothers
   s_b <- glue("b{covar_s}") 
   s_p <- glue("p{covar_s}")
   
   # Prior strengths
-  # TODO: Try tighter until performance decrease
   pri.var <- switch(prior_strength,
                     "1"=list(hs1=0.5, hs2=0.6, b=0.75, de=0.3, i="1-loose"),
                     "2"=list(hs1=1, hs2=0.4, b=0.5, de=0.2, i="2-medium"),
@@ -225,8 +227,9 @@ for(i in length(covariate_sets)) {
   
   
   
-  # initial fit -------------------------------------------------------------
-  
+
+# dataset -----------------------------------------------------------------
+
   target <- species[sp]
   f.prefix <- glue("out{sep}{pri.var$i}{sep}")
   f.suffix <- glue("{i.name}_{target}")
@@ -298,7 +301,10 @@ for(i in length(covariate_sets)) {
   test.df <- target.df %>% filter(year > 2019)
   bloomThresh <- max((!target.df$Nbloom)*target.df$NcatNum) # 1:4, maximum considered 'No bloom'
   
-  # Full fit for predictions
+  
+  
+
+# full fits ---------------------------------------------------------------
   
   # Formulas with interactions: errors if missing NcatF levels
   form_ord <- makeFormula(train.df, covar_int, "NcatNum | thres(3)")
@@ -354,10 +360,18 @@ for(i in length(covariate_sets)) {
   fit.df <- full_join(
     train.df %>%
       mutate(ord_mnpr=calc_ord_mnpr(fit.ord, bloomThresh, summaryStat="median"),
-             ordP_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh, summaryStat="median")),
+             ordq90_mnpr=calc_ord_mnpr(fit.ord, bloomThresh, summaryStat="q90"),
+             ordP_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh, summaryStat="median"),
+             ordPq90_mnpr=calc_ord_mnpr(fit.ordP, bloomThresh, summaryStat="q90")),
     tibble(obsid=c(filter(train.df, Nbloom1==0)$obsid, filter(train.df, Nbloom1==1)$obsid),
-           bern_mnpr=c(colMeans(fit.bern01), colMeans(fit.bern11)),
-           bernP_mnpr=c(colMeans(fit.bernP01), colMeans(fit.bernP11)))
+           bern_mnpr=c(apply(fit.bern01, 2, median), 
+                       apply(fit.bern11, 2, median)),
+           bernq90_mnpr=c(apply(fit.bern01, 2, quantile, probs=0.9), 
+                          apply(fit.bern11, 2, quantile, probs=0.9)),
+           bernP_mnpr=c(apply(fit.bernP01, 2, median), 
+                        apply(fit.bernP11, 2, median)),
+           bernPq90_mnpr=c(apply(fit.bernP01, 2, quantile, probs=0.9), 
+                           apply(fit.bernP11, 2, quantile, probs=0.9)))
   ) %>%
     mutate(covarSet=i.name,
            species=target)
@@ -368,29 +382,41 @@ for(i in length(covariate_sets)) {
   test.df11 <- test.df %>% filter(Nbloom1==1) %>% droplevels
   pred.ord <- posterior_epred(out.ord, newdata=test.df, allow_new_levels=T)
   pred.ordP <- posterior_epred(out.ordP, newdata=test.df, allow_new_levels=T)
-  pred.bern01 <- colMeans(posterior_epred(out.bern01, newdata=test.df01, allow_new_levels=T))
-  pred.bernP01 <- colMeans(posterior_epred(out.bernP01, newdata=test.df01, allow_new_levels=T))
+  pred.bern01 <- posterior_epred(out.bern01, newdata=test.df01, allow_new_levels=T)
+  pred.bernP01 <- posterior_epred(out.bernP01, newdata=test.df01, allow_new_levels=T)
   if(nrow(test.df11) > 0) {
-    pred.bern11 <- colMeans(posterior_epred(out.bern11, newdata=test.df11, allow_new_levels=T))
-    pred.bernP11 <- colMeans(posterior_epred(out.bernP11, newdata=test.df11, allow_new_levels=T))
+    pred.bern11 <- posterior_epred(out.bern11, newdata=test.df11, allow_new_levels=T)
+    pred.bernP11 <- posterior_epred(out.bernP11, newdata=test.df11, allow_new_levels=T)
+    pred.bern11.md <- apply(pred.bern11, 2, median)
+    pred.bernP11.md <- apply(pred.bernP11, 2, median)
+    pred.bern11.q90 <- apply(pred.bern11, 2, quantile, probs=0.9)
+    pred.bernP11.q90 <- apply(pred.bernP11, 2, quantile, probs=0.9)
   } else {
-    pred.bern11 <- numeric(0)
-    pred.bernP11 <- numeric(0)
+    pred.bern11.md <- pred.bern11.q90 <- numeric(0)
+    pred.bernP11.md <- pred.bernP11.q90 <- numeric(0)
   }
   
   pred.df <- full_join(
     test.df %>%
       mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="median"),
-             ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="median")),
+             ordq90_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="q90"),
+             ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="median"),
+             ordPq90_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="q90")),
     tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
-           bern_mnpr=c(pred.bern01, pred.bern11),
-           bernP_mnpr=c(pred.bernP01, pred.bernP11))
+           bern_mnpr=c(apply(pred.bern01, 2, median), pred.bern11.md),
+           bernq90_mnpr=c(apply(pred.bern01, 2, quantile, probs=0.9), pred.bern11.q90),
+           bernP_mnpr=c(apply(pred.bernP01, 2, median), pred.bernP11.md),
+           bernPq90_mnpr=c(apply(pred.bernP01, 2, quantile, probs=0.9), pred.bernP11.q90))
   ) %>%
     mutate(covarSet=i.name,
            species=target)
   
   write_csv(pred.df, glue("{f.prefix}pred_HBuv_{f.suffix}.csv"))
   
+  
+
+# cross-validation --------------------------------------------------------
+
   # Cross-validation by year
   yrCV <- unique(filter(train.df, year>2014)$year)
   cv_pred <- map(yrCV, ~NULL)
@@ -446,23 +472,31 @@ for(i in length(covariate_sets)) {
     cv_test.df11 <- cv_test.df %>% filter(Nbloom1==1) %>% droplevels
     pred.ord <- posterior_epred(cv.ord, newdata=cv_test.df, allow_new_levels=T)
     pred.ordP <- posterior_epred(cv.ordP, newdata=cv_test.df, allow_new_levels=T)
-    pred.bern01 <- colMeans(posterior_epred(cv.bern01, newdata=cv_test.df01, allow_new_levels=T))
-    pred.bernP01 <- colMeans(posterior_epred(cv.bernP01, newdata=cv_test.df01, allow_new_levels=T))
+    pred.bern01 <- posterior_epred(cv.bern01, newdata=cv_test.df01, allow_new_levels=T)
+    pred.bernP01 <- posterior_epred(cv.bernP01, newdata=cv_test.df01, allow_new_levels=T)
     if(nrow(cv_test.df11) > 0) {
-      pred.bern11 <- colMeans(posterior_epred(cv.bern11, newdata=cv_test.df11, allow_new_levels=T))
-      pred.bernP11 <- colMeans(posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T))
+      pred.bern11 <- posterior_epred(cv.bern11, newdata=cv_test.df11, allow_new_levels=T)
+      pred.bernP11 <- posterior_epred(cv.bernP11, newdata=cv_test.df11, allow_new_levels=T)
+      pred.bern11.md <- apply(pred.bern11, 2, median)
+      pred.bernP11.md <- apply(pred.bernP11, 2, median)
+      pred.bern11.q90 <- apply(pred.bern11, 2, quantile, probs=0.9)
+      pred.bernP11.q90 <- apply(pred.bernP11, 2, quantile, probs=0.9)
     } else {
-      pred.bern11 <- numeric(0)
-      pred.bernP11 <- numeric(0)
+      pred.bern11.md <- pred.bern11.q90 <- numeric(0)
+      pred.bernP11.md <- pred.bernP11.q90 <- numeric(0)
     }
     
     cv_pred[[k]] <- full_join(
       cv_test.df %>%
         mutate(ord_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="median"),
-               ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="median")),
-      tibble(obsid=c(filter(cv_test.df, Nbloom1==0)$obsid, filter(cv_test.df, Nbloom1==1)$obsid),
-             bern_mnpr=c(pred.bern01, pred.bern11),
-             bernP_mnpr=c(pred.bernP01, pred.bernP11))
+               ordq90_mnpr=calc_ord_mnpr(pred.ord, bloomThresh, summaryStat="q90"),
+               ordP_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="median"),
+               ordPq90_mnpr=calc_ord_mnpr(pred.ordP, bloomThresh, summaryStat="q90")),
+      tibble(obsid=c(filter(test.df, Nbloom1==0)$obsid, filter(test.df, Nbloom1==1)$obsid),
+             bern_mnpr=c(apply(pred.bern01, 2, median), pred.bern11.md),
+             bernq90_mnpr=c(apply(pred.bern01, 2, quantile, probs=0.9), pred.bern11.q90),
+             bernP_mnpr=c(apply(pred.bernP01, 2, median), pred.bernP11.md),
+             bernPq90_mnpr=c(apply(pred.bernP01, 2, quantile, probs=0.9), pred.bernP11.q90))
     ) %>%
       mutate(covarSet=i.name,
              species=target)
